@@ -1,0 +1,21 @@
+# ===============================
+# Project-Specific Ignores
+# ===============================
+
+# Keep SQLite databases for this project (override root .gitignore)
+!db.sqlite
+!*.sqlite
+
+# Docker volumes & runtime
+docker-data/
+*.pid
+
+# Test artifacts
+.pytest_cache/
+coverage.xml
+.coverage
+
+# Flask / App runtime
+instance/
+*.pyc
+
