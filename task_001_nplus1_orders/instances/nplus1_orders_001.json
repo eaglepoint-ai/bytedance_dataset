@@ -1,0 +1,16 @@
+{
+  "instance_id": "nplus1_orders_001",
+  "problem_statement": "Optimize the function `latest_orders_per_active_user` to eliminate an N+1 query pattern when aggregating the latest N orders per active user in a SQLAlchemy codebase. The current implementation loads active users and then triggers per-user order queries, causing poor scalability. Refactor the implementation to use a single optimized SQL strategy (e.g., window functions) while preserving exact functionality. Requirements: return only active users, include active users with zero orders as empty lists, ensure deterministic ordering by created_at DESC then id DESC, handle n <= 0 by returning empty lists for all active users, and remain compatible with SQLite in-memory execution. No new dependencies may be added.",
+  "base_commit": "repository_before",
+  "test_patch": "tests/",
+  "repo": "https://github.com/nplus1-orders-dataset",
+  "environment_setup": "Dockerfile",
+  "FAIL_TO_PASS": [
+    "test_regression_query_count_must_be_small"
+  ],
+  "PASS_TO_PASS": [
+    "test_correctness_latest_2_orders_per_active_user",
+    "test_tie_breaking_created_at_then_id_desc",
+    "test_n_zero_returns_empty_lists_for_active_users"
+  ]
+}
