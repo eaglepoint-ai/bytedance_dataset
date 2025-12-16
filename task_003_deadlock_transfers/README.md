@@ -43,16 +43,6 @@ These failures are:
 - Common in production systems with transactional workloads
 
 
-### What This Task Tests
-
-This task specifically evaluates whether a model understands and correctly applies:
-
-- Row-level locking using `SELECT … FOR UPDATE`
-- Deadlock avoidance through **consistent global lock ordering**
-- Correct transaction boundaries and atomicity
-- Deterministic concurrency testing (thread barriers, no sleeps)
-- Database-level concurrency reasoning (not Python locks or retries)
-
 ## Expected Fix (High-Level Requirements)
 
 A correct solution must:
