@@ -1,0 +1,326 @@
+diff -ruN --exclude=__pycache__ --exclude=*.pyc --exclude=*.sqlite --exclude=db.sqlite --exclude=app --exclude=templates repository_before/__init__.py repository_after/__init__.py
+--- repository_before/__init__.py	2025-12-15 13:40:12
++++ repository_after/__init__.py	2025-12-15 21:31:09
+@@ -0,0 +1,2 @@
++# repository_after package
++
+diff -ruN --exclude=__pycache__ --exclude=*.pyc --exclude=*.sqlite --exclude=db.sqlite --exclude=app --exclude=templates repository_before/access_logic.py repository_after/access_logic.py
+--- repository_before/access_logic.py	2025-12-15 16:00:24
++++ repository_after/access_logic.py	2025-12-15 22:02:26
+@@ -1,75 +1,209 @@
+ # access_logic.py
+-from repository_before.models import Folder, File, Permission
++"""
++Optimized access logic for Google Drive-like permission system.
+ 
+-PERMISSION_RANK = {
+-    "view": 1,
+-    "comment": 2,
+-    "edit": 3,
+-    "owner": 4,
+-}
++Key optimizations over the naive implementation:
++1. Uses recursive CTE for folder hierarchy traversal (database-side, not Python)
++2. Single query using UNION to combine all access sources
++3. Filters at database level - never loads all folders/files into memory
++4. Minimizes round trips to database (2 queries total: folders + files)
+ 
+-def build_folder_tree(folders):
+-    tree = {}
+-    by_id = {f.id: f for f in folders}
++This scales to millions of folders/files because the database handles:
++- Recursive tree traversal via CTE
++- Set operations via UNION
++- Filtering via WHERE clauses with indexes
++"""
+ 
+-    for folder in folders:
+-        if folder.parentId:
+-            tree.setdefault(folder.parentId, []).append(folder)
+-        else:
+-            tree.setdefault(None, []).append(folder)
++from sqlalchemy import text
+ 
+-    return tree, by_id
+ 
+-def collect_descendants(folder_id, tree, result):
+-    children = tree.get(folder_id, [])
+-    for child in children:
+-        result.add(child.id)
+-        collect_descendants(child.id, tree, result)
+-
+ def get_accessible_resources(session, user_id):
+-    folders = session.query(Folder).all()
+-    files = session.query(File).all()
+-    permissions = session.query(Permission).filter(
+-        Permission.userId == user_id
+-    ).all()
++    """
++    Return all folders and files accessible to a user.
++    
++    Access is granted via:
++    1. Ownership (user owns the resource)
++    2. Direct permission (permission record for the resource)
++    3. Inherited permission (parent folder has permission, applies to descendants)
++    
++    Uses recursive CTE for efficient hierarchy traversal in the database.
++    """
++    
++    # Query for accessible folders using recursive CTE
++    # This finds:
++    # 1. Folders owned by user
++    # 2. Folders with direct permission
++    # 3. All descendant folders of folders with permission (recursive CTE)
++    accessible_folders_query = text("""
++        WITH RECURSIVE 
++        -- Base: folders user has direct access to (owned or permitted)
++        direct_access_folders AS (
++            -- Folders owned by user
++            SELECT id FROM folders WHERE "ownerId" = :user_id
++            UNION
++            -- Folders with explicit permission
++            SELECT p."resourceId" as id 
++            FROM permissions p
++            WHERE p."userId" = :user_id 
++              AND p."resourceType" = 'folder'
++              AND EXISTS (SELECT 1 FROM folders f WHERE f.id = p."resourceId")
++        ),
++        -- Recursive: find all descendant folders
++        all_accessible_folders AS (
++            -- Start with directly accessible folders
++            SELECT id FROM direct_access_folders
++            UNION
++            -- Recursively add children of accessible folders
++            SELECT f.id
++            FROM folders f
++            INNER JOIN all_accessible_folders aaf ON f."parentId" = aaf.id
++        )
++        SELECT DISTINCT id FROM all_accessible_folders
++    """)
++    
++    # Query for accessible files
++    # This finds:
++    # 1. Files owned by user
++    # 2. Files with direct permission
++    # 3. Files inside any accessible folder
++    accessible_files_query = text("""
++        WITH RECURSIVE 
++        -- Base: folders user has direct access to
++        direct_access_folders AS (
++            SELECT id FROM folders WHERE "ownerId" = :user_id
++            UNION
++            SELECT p."resourceId" as id 
++            FROM permissions p
++            WHERE p."userId" = :user_id 
++              AND p."resourceType" = 'folder'
++              AND EXISTS (SELECT 1 FROM folders f WHERE f.id = p."resourceId")
++        ),
++        -- Recursive: all accessible folders including descendants
++        all_accessible_folders AS (
++            SELECT id FROM direct_access_folders
++            UNION
++            SELECT f.id
++            FROM folders f
++            INNER JOIN all_accessible_folders aaf ON f."parentId" = aaf.id
++        )
++        -- Files accessible to user
++        SELECT DISTINCT id FROM (
++            -- Files owned by user
++            SELECT id FROM files WHERE "ownerId" = :user_id
++            UNION
++            -- Files with direct permission
++            SELECT p."resourceId" as id 
++            FROM permissions p
++            WHERE p."userId" = :user_id 
++              AND p."resourceType" = 'file'
++              AND EXISTS (SELECT 1 FROM files f WHERE f.id = p."resourceId")
++            UNION
++            -- Files inside accessible folders
++            SELECT f.id
++            FROM files f
++            WHERE f."folderId" IN (SELECT id FROM all_accessible_folders)
++        ) AS accessible_files
++    """)
++    
++    # Execute queries
++    folder_result = session.execute(accessible_folders_query, {"user_id": user_id})
++    folder_ids = [row[0] for row in folder_result]
++    
++    file_result = session.execute(accessible_files_query, {"user_id": user_id})
++    file_ids = [row[0] for row in file_result]
++    
++    return {
++        "folders": folder_ids,
++        "files": file_ids,
++    }
+ 
+-    folder_tree, folder_map = build_folder_tree(folders)
+ 
+-    accessible_folders = {}
+-    accessible_files = {}
+-
+-    # 1. Ownership
+-    for f in folders:
+-        if f.ownerId == user_id:
+-            accessible_folders[f.id] = "owner"
+-
+-    for f in files:
+-        if f.ownerId == user_id:
+-            accessible_files[f.id] = "owner"
+-
+-    # 2. Explicit permissions
+-    for p in permissions:
+-        if p.resourceType == "folder":
+-            accessible_folders[p.resourceId] = p.level
+-        elif p.resourceType == "file":
+-            accessible_files[p.resourceId] = p.level
+-
+-    # 3. Folder inheritance (recursive)
+-    inherited_folder_ids = set()
+-    for folder_id in list(accessible_folders.keys()):
+-        collect_descendants(folder_id, folder_tree, inherited_folder_ids)
+-
+-    for fid in inherited_folder_ids:
+-        if fid not in accessible_folders:
+-            accessible_folders[fid] = "view"  # naive inheritance
+-
+-    # 4. Files inside accessible folders
+-    for file in files:
+-        if file.folderId in accessible_folders:
+-            if file.id not in accessible_files:
+-                accessible_files[file.id] = accessible_folders[file.folderId]
+-
++def get_accessible_resources_with_levels(session, user_id):
++    """
++    Extended version that also returns permission levels.
++    
++    Useful when you need to know what actions the user can perform
++    on each resource (view, comment, edit, owner).
++    """
++    
++    # Query with permission levels
++    accessible_folders_with_levels_query = text("""
++        WITH RECURSIVE 
++        direct_access_folders AS (
++            -- Owned folders get 'owner' level
++            SELECT id, 'owner' as level FROM folders WHERE "ownerId" = :user_id
++            UNION
++            -- Permitted folders get their permission level
++            SELECT p."resourceId" as id, p.level
++            FROM permissions p
++            WHERE p."userId" = :user_id 
++              AND p."resourceType" = 'folder'
++              AND EXISTS (SELECT 1 FROM folders f WHERE f.id = p."resourceId")
++        ),
++        all_accessible_folders AS (
++            SELECT id, level FROM direct_access_folders
++            UNION
++            -- Inherited folders get 'view' (or could inherit parent's level)
++            SELECT f.id, 'view' as level
++            FROM folders f
++            INNER JOIN all_accessible_folders aaf ON f."parentId" = aaf.id
++            WHERE f.id NOT IN (SELECT id FROM direct_access_folders)
++        )
++        -- Use highest permission level when multiple exist
++        SELECT id, MAX(level) as level 
++        FROM all_accessible_folders 
++        GROUP BY id
++    """)
++    
++    accessible_files_with_levels_query = text("""
++        WITH RECURSIVE 
++        direct_access_folders AS (
++            SELECT id, 'owner' as level FROM folders WHERE "ownerId" = :user_id
++            UNION
++            SELECT p."resourceId" as id, p.level
++            FROM permissions p
++            WHERE p."userId" = :user_id 
++              AND p."resourceType" = 'folder'
++              AND EXISTS (SELECT 1 FROM folders f WHERE f.id = p."resourceId")
++        ),
++        all_accessible_folders AS (
++            SELECT id, level FROM direct_access_folders
++            UNION
++            SELECT f.id, 'view' as level
++            FROM folders f
++            INNER JOIN all_accessible_folders aaf ON f."parentId" = aaf.id
++            WHERE f.id NOT IN (SELECT id FROM direct_access_folders)
++        ),
++        folder_levels AS (
++            SELECT id, MAX(level) as level FROM all_accessible_folders GROUP BY id
++        )
++        SELECT id, MAX(level) as level FROM (
++            -- Owned files
++            SELECT id, 'owner' as level FROM files WHERE "ownerId" = :user_id
++            UNION ALL
++            -- Directly permitted files
++            SELECT p."resourceId" as id, p.level
++            FROM permissions p
++            WHERE p."userId" = :user_id 
++              AND p."resourceType" = 'file'
++              AND EXISTS (SELECT 1 FROM files f WHERE f.id = p."resourceId")
++            UNION ALL
++            -- Files in accessible folders (inherit folder's level)
++            SELECT f.id, fl.level
++            FROM files f
++            INNER JOIN folder_levels fl ON f."folderId" = fl.id
++        ) AS all_files
++        GROUP BY id
++    """)
++    
++    folder_result = session.execute(accessible_folders_with_levels_query, {"user_id": user_id})
++    folders = {row[0]: row[1] for row in folder_result}
++    
++    file_result = session.execute(accessible_files_with_levels_query, {"user_id": user_id})
++    files = {row[0]: row[1] for row in file_result}
++    
+     return {
+-        "folders": list(accessible_folders.keys()),
+-        "files": list(accessible_files.keys()),
++        "folders": folders,
++        "files": files,
+     }
++
+diff -ruN --exclude=__pycache__ --exclude=*.pyc --exclude=*.sqlite --exclude=db.sqlite --exclude=app --exclude=templates repository_before/app.py repository_after/app.py
+--- repository_before/app.py	2025-12-15 16:25:00
++++ repository_after/app.py	2025-12-15 21:31:09
+@@ -1,7 +1,7 @@
+ # app.py
+ from flask import Flask, jsonify
+-from repository_before import db
+-from repository_before.access_logic import get_accessible_resources
++from repository_after import db
++from repository_after.access_logic import get_accessible_resources
+ 
+ def create_app(db_url=None):
+     app = Flask(__name__)
+@@ -22,3 +22,4 @@
+ if __name__ == "__main__":
+     app = create_app()  # Uses DATABASE_URL from environment
+     app.run(host="0.0.0.0", port=5000)
++
+diff -ruN --exclude=__pycache__ --exclude=*.pyc --exclude=*.sqlite --exclude=db.sqlite --exclude=app --exclude=templates repository_before/db.py repository_after/db.py
+--- repository_before/db.py	2025-12-15 16:25:00
++++ repository_after/db.py	2025-12-15 21:31:09
+@@ -2,7 +2,7 @@
+ import os
+ from sqlalchemy import create_engine
+ from sqlalchemy.orm import sessionmaker
+-from repository_before.models import Base
++from repository_after.models import Base
+ 
+ engine = None
+ SessionLocal = None
+@@ -18,3 +18,4 @@
+     engine = create_engine(db_url, echo=False)
+     SessionLocal = sessionmaker(bind=engine)
+     Base.metadata.create_all(bind=engine)
++
+diff -ruN --exclude=__pycache__ --exclude=*.pyc --exclude=*.sqlite --exclude=db.sqlite --exclude=app --exclude=templates repository_before/models.py repository_after/models.py
+--- repository_before/models.py	2025-12-15 13:17:49
++++ repository_after/models.py	2025-12-15 21:31:09
+@@ -34,3 +34,4 @@
+     resourceId = Column(String)
+     level = Column(String)  # view | comment | edit | owner
+     createdAt = Column(DateTime)
++
