@@ -1,0 +1,43 @@
+services:
+  test-before:
+    build: .
+    environment:
+      - PYTHONPATH=/app/repository_before
+    volumes:
+      - ./repository_before:/app/repository_before:ro
+      - ./tests:/app/tests:ro
+    command: pytest -v tests/
+
+  test-after:
+    build: .
+    environment:
+      - PYTHONPATH=/app/repository_after
+    volumes:
+      - ./repository_after:/app/repository_after:ro
+      - ./tests:/app/tests:ro
+    command: pytest -v tests/
+
+  generate-metrics:
+    build: .
+    volumes:
+      - ./repository_before:/app/repository_before:ro
+      - ./repository_after:/app/repository_after:ro
+      - ./evaluation:/app/evaluation
+    command: >
+      sh -c "
+      echo 'Generating pylint scores...' &&
+      pylint repository_before/calc_total.py | tail -n 2 > evaluation/pylint_score_before.txt &&
+      pylint repository_after/calc_total.py | tail -n 2 > evaluation/pylint_score_after.txt &&
+      echo 'Generating radon complexity reports...' &&
+      radon cc -j repository_before/calc_total.py > evaluation/radon_report_before.json &&
+      radon cc -j repository_after/calc_total.py > evaluation/radon_report_after.json &&
+      echo 'Metrics generated successfully!'
+      "
+
+  compare-metrics:
+    build: .
+    depends_on:
+      - generate-metrics
+    volumes:
+      - ./evaluation:/app/evaluation:ro
+    command: python evaluation/compare_metrics.py
