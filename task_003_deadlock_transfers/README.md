@@ -4,7 +4,7 @@
 
 ## Overview
 
-This dataset instance evaluates a model’s ability to diagnose and fix a **real-world database concurrency bug**
+This task diagnose and fix a **real-world database concurrency bug**
 in a PostgreSQL-backed money transfer system.
 
 The original implementation works correctly in single-threaded execution but **fails intermittently under
@@ -17,9 +17,6 @@ The goal is to refactor the implementation so that it is:
 - Deadlock-free
 - Deterministic under concurrency
 - Efficient at runtime
-
-All fixes must preserve the original functional behavior and **must not modify the tests**.
-
 
 ### Problem Description
 
