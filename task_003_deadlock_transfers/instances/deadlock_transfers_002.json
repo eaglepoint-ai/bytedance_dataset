@@ -1,0 +1,15 @@
+{
+  "instance_id": "deadlock_transfers_002",
+  "problem_statement": "Fix intermittent concurrency failures in a PostgreSQL-backed money transfer function. Under concurrent transfers touching the same accounts in opposite directions, the system can deadlock or fail due to conflicting row lock acquisition order and unsafe read-before-lock behavior. Refactor the transfer implementation so that it is atomic and deadlock-free under multi-thread concurrency. Requirements: do not change tests, remain Postgres-compatible, do not add sleeps, keep deterministic behavior, lock rows consistently (global ordering), lock before reading balances, and raise InsufficientFunds when the source account lacks sufficient funds.",
+  "base_commit": "repository_before",
+  "test_patch": "tests/",
+  "repo": "https://github.com/deadlock-transfers-dataset",
+  "environment_setup": "Dockerfile",
+  "FAIL_TO_PASS": [
+    "test_multiway_concurrent_transfers"
+  ],
+  "PASS_TO_PASS": [
+    "test_final_balances_are_correct",
+    "test_insufficient_funds_rolls_back_atomically"
+  ]
+}
