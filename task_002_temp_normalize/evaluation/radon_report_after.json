@@ -1,0 +1,1 @@
+{"repository_after/ids.py": [{"type": "function", "rank": "A", "complexity": 5, "endline": 12, "name": "_normalize_temp", "col_offset": 0, "lineno": 4, "closures": []}, {"type": "function", "rank": "A", "complexity": 3, "endline": 30, "name": "normalize_id", "col_offset": 0, "lineno": 15, "closures": []}]}
