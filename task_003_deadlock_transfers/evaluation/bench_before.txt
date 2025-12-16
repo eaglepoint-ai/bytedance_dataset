@@ -1,0 +1,5 @@
+Benchmark target PYTHONPATH=/app/repository_before
+Workload trials: 20
+Trials with errors: 16
+Total time (10 runs): 0.6131s
+Avg time/run: 0.061307s
