@@ -1,1 +1,1 @@
-{"repository_before/calc_total.py": [{"type": "function", "rank": "C", "complexity": 16, "lineno": 3, "name": "calc_total", "endline": 82, "col_offset": 0, "closures": []}]}
+{"repository_before/calc_total.py": [{"type": "function", "rank": "C", "complexity": 16, "endline": 82, "name": "calc_total", "lineno": 3, "col_offset": 0, "closures": []}]}

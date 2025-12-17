@@ -1,0 +1,66 @@
+services:
+  # Run tests against repository_before (expected to fail - no test suite)
+  test-before:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      - TEST_TARGET=before
+    command: >
+      sh -c "
+        echo '========================================' &&
+        echo '  TESTING: repository_before' &&
+        echo '========================================' &&
+        echo '' &&
+        cd /app/repository_before &&
+        if [ -d 'tests' ] && [ -f 'tests/test_lru_cache.py' ]; then
+          PYTHONPATH=/app/repository_before pytest -v tests/test_lru_cache.py --tb=short;
+        else
+          echo 'No test suite found in repository_before/tests/' &&
+          echo 'This is expected - the before state has no tests.' &&
+          exit 1;
+        fi
+      "
+
+  # Run tests against repository_after (expected to pass)
+  test-after:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      - TEST_TARGET=after
+    command: >
+      sh -c "
+        echo '========================================' &&
+        echo '  TESTING: repository_after' &&
+        echo '========================================' &&
+        echo '' &&
+        cd /app/repository_after &&
+        PYTHONPATH=/app/repository_after pytest -v tests/test_lru_cache.py --tb=short --cov=. --cov-report=term-missing
+      "
+
+  # Run meta-tests to verify the test suite quality
+  meta-test:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: >
+      sh -c "
+        echo '========================================' &&
+        echo '  META-TESTS: Verifying Test Suite Quality' &&
+        echo '========================================' &&
+        echo '' &&
+        echo 'These tests verify that the test suite can catch:' &&
+        echo '  - Missing eviction logic' &&
+        echo '  - Missing recency updates' &&
+        echo '  - Wrong eviction policy (MRU instead of LRU)' &&
+        echo '' &&
+        PYTHONPATH=/app pytest -v tests/meta_test_lru_cache.py --tb=short
+      "
+
+  # Compare both repositories
+  compare:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: ["bash", "/app/scripts/compare.sh"]
