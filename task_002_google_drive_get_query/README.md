@@ -117,26 +117,71 @@ Typical results on test dataset (100 folders, 5000 files):
 
 ---
 
-## Development
+## Evaluation with Reporting
 
-### Run the App Locally
+Generate structured evaluation reports with timestamps, metrics, and environment info.
 
-```bash
-# Start PostgreSQL
-docker compose up -d db
-
-# Run before implementation
-docker compose run --rm app python repository_before/app.py
-
-# Run after implementation  
-docker compose run --rm app python repository_after/app.py
-```
-
-### Access the Dashboard
+### Run Evaluation with Reports
 
 ```bash
-curl http://localhost:8080/dashboard/heavy_user
+# Default parameters (100 folders, 50 files/folder, 5 iterations)
+docker compose run --rm app python evaluation/run_evaluation.py
+
+# Custom parameters
+docker compose run --rm app python evaluation/run_evaluation.py \
+    --folders 200 \
+    --files-per-folder 100 \
+    --iterations 10
 ```
+
+### Report Output Structure
+
+Reports are saved in `evaluation/` with timestamped folders:
+
+```
+evaluation/
+├── 2025-12-18/
+│   ├── 14-30-25/
+│   │   ├── report.json    # Structured data (metrics, params, env)
+│   │   ├── report.md      # Human-readable summary
+│   │   └── stdout.log     # Raw test output
+│   └── 16-45-10/
+│       ├── report.json
+│       ├── report.md
+│       └── stdout.log
+├── run_evaluation.py
+└── performance_benchmark.py
+```
+
+### Report Contents
+
+**report.json** contains:
+- `run_id` - Unique identifier for this run
+- `started_at` / `finished_at` - ISO timestamps
+- `duration_seconds` - Total evaluation time
+- `parameters` - Test configuration (folders, files, iterations)
+- `environment` - Python version, Docker image, git commit, OS info
+- `metrics` - Before/after performance data with speedup calculations
+
+**report.md** provides:
+- Summary table with before/after comparison
+- Detailed per-user performance breakdown
+- Environment and parameter documentation
+
+**stdout.log** captures:
+- Real-time test output
+- Seeding statistics
+- Error messages (if any)
+
+### CLI Options
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--users` | 21 | Number of test users |
+| `--folders` | 100 | Number of folders to create |
+| `--files-per-folder` | 50 | Files per folder |
+| `--iterations` | 5 | Test iterations per user |
+| `--output-dir` | evaluation | Output directory |
 
 ---
 
@@ -160,6 +205,14 @@ curl http://localhost:8080/dashboard/heavy_user
 │   ├── test_performance_before.py     # Before performance tests
 │   ├── test_performance_after.py # After performance tests
 │   └── test_comparison.py      # Comparison tests
+├── evaluation/
+│   ├── run_evaluation.py       # Evaluation runner with reporting
+│   ├── performance_benchmark.py
+│   └── YYYY-MM-DD/             # Date-based report folders
+│       └── HH-MM-SS/           # Timestamp-based run folders
+│           ├── report.json     # Structured metrics & metadata
+│           ├── report.md       # Human-readable report
+│           └── stdout.log      # Raw output log
 ├── seed_db.py                  # Database seeding script
 ├── docker-compose.yml
 ├── Dockerfile
