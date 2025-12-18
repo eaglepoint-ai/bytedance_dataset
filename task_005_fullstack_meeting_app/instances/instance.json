@@ -1,8 +1,8 @@
 {
-  "instance_id": "arch_refactor_transfers_001",
-  "problem_statement": "Refactor a flat Python module layout into a maintainable architecture without breaking behavior or public APIs.",
+  "instance_id": "task_fullstack_meeting_app",
+  "problem_statement": "Building a meeting scheduler application with a backend and a frontend.",
   "base_commit": "repository_before",
-  "test_patch": "tests/",
-  "repo": "-",
-  "environment_setup": "Dockerfile"
+  "test_patch": "patches/task_fullstack_meeting_app.patch",
+  "repo": "repository_after/meeting-scheduler",
+  "environment_setup": "docker-compose.yml"
 }
