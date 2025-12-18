@@ -1,0 +1,14 @@
+{
+  "instance_id": "arch_refactor_transfers_001",
+  "problem_statement": "Refactor a flat Python module layout into a maintainable architecture without breaking behavior or public APIs.",
+  "base_commit": "repository_before",
+  "test_patch": "tests/",
+  "repo": "https://github.com/arch-refactor-transfers-dataset",
+  "environment_setup": "Dockerfile",
+  "FAIL_TO_PASS": [
+    "test_layered_layout_exists"
+  ],
+  "PASS_TO_PASS": [
+    "test_public_api"
+  ]
+}
