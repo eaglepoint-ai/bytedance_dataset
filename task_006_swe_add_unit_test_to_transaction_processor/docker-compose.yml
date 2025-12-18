@@ -1,0 +1,10 @@
+version: "3.8"
+
+services:
+  tests:
+    build: .
+    volumes:
+      - .:/app
+    command: >
+      pytest -q
+      tests/test_transaction_processor_rules_meta.py
