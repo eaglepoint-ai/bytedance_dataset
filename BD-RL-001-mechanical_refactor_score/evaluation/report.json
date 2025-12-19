@@ -1,0 +1,51 @@
+{
+  "started_at": "2025-12-19T16:45:37.595375",
+  "finished_at": "2025-12-19T16:45:38.790224",
+  "duration_seconds": 1.194849,
+  "success": true,
+  "error": null,
+  "parameters": {},
+  "metrics": {
+    "before": {
+      "file_path": "/Users/mac/Documents/EaglePoint/Deliverable/bytedance_dataset/BD-RL-001-mechanical_refactor_score/repository_before/app/score.py",
+      "pylint": {
+        "score": null,
+        "max_score": 10.0,
+        "error": "Could not parse pylint score"
+      },
+      "lines": 78,
+      "float_calls_in_loop": 2,
+      "int_calls_in_loop": 0,
+      "duplication_info": {
+        "float_calls_total": 2,
+        "int_calls_total": 2,
+        "float_calls_in_loop": 2,
+        "int_calls_in_loop": 0
+      }
+    },
+    "after": {
+      "file_path": "/Users/mac/Documents/EaglePoint/Deliverable/bytedance_dataset/BD-RL-001-mechanical_refactor_score/repository_after/app/score.py",
+      "pylint": {
+        "score": null,
+        "max_score": 10.0,
+        "error": "Could not parse pylint score"
+      },
+      "lines": 79,
+      "float_calls_in_loop": 0,
+      "int_calls_in_loop": 0,
+      "duplication_info": {
+        "float_calls_total": 0,
+        "int_calls_total": 2,
+        "float_calls_in_loop": 0,
+        "int_calls_in_loop": 0
+      }
+    },
+    "comparison": {
+      "pylint_score_improvement": null,
+      "pylint_score_improvement_pct": null,
+      "line_change": 1,
+      "float_calls_reduction": 2,
+      "int_calls_reduction": 0
+    }
+  }
+}
