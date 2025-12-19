@@ -1,4 +1,4 @@
-FROM node:18-alpine
+FROM node:24
 
 WORKDIR /app
 
@@ -8,4 +8,4 @@ RUN npm install
 
 COPY . .
 
-CMD ["npm", "test"]
+CMD ["sh", "-c", "npm run test:frontend && npm run test:backend"]
