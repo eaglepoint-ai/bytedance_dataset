@@ -1,0 +1,49 @@
+{
+  "started_at": "2025-12-19T15:54:19.299782",
+  "finished_at": "2025-12-19T15:55:05.185977",
+  "duration_seconds": 45.886195,
+  "success": true,
+  "error": null,
+  "parameters": {
+    "users": 200,
+    "orders_per_user": 300,
+    "active_ratio": 0.8,
+    "top_n": 2,
+    "iterations": 10
+  },
+  "metrics": {
+    "seed_stats": {
+      "users": 200,
+      "active_users": 160,
+      "inactive_users": 40,
+      "orders_per_user": 300,
+      "total_orders": 60000
+    },
+    "before": {
+      "query_count": 161,
+      "query_optimized": true,
+      "performance": {
+        "iterations": 10,
+        "total_time_seconds": 20.368676167,
+        "avg_time_seconds": 2.0368676167,
+        "avg_time_ms": 2036.8676166999999
+      }
+    },
+    "after": {
+      "query_count": 2,
+      "query_optimized": true,
+      "performance": {
+        "iterations": 10,
+        "total_time_seconds": 19.239750332999996,
+        "avg_time_seconds": 1.9239750332999996,
+        "avg_time_ms": 1923.9750332999997
+      }
+    },
+    "comparison": {
+      "query_count_reduction": 159,
+      "query_count_reduction_pct": 98.75776397515527,
+      "speedup": 1.06,
+      "improvement_pct": 5.5
+    }
+  }
+}

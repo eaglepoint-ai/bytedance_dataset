@@ -280,7 +280,7 @@ def main():
     parser.add_argument("--active-ratio", type=float, default=0.8, help="Ratio of active users (default: 0.8)")
     parser.add_argument("--top-n", type=int, default=2, help="Top N orders per user (default: 2)")
     parser.add_argument("--iterations", type=int, default=10, help="Performance test iterations (default: 10)")
-    parser.add_argument("--output", type=str, help="Output JSON file path (optional)")
+    parser.add_argument("--output", type=str, default="evaluation/report.json", help="Output JSON file path (default: evaluation/report.json)")
     
     args = parser.parse_args()
     
@@ -320,19 +320,12 @@ def main():
         "metrics": metrics,
     }
     
-    # Output JSON if requested
-    if args.output:
-        output_path = Path(args.output)
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        with open(output_path, "w") as f:
-            json.dump(report, f, indent=2)
-        print(f"\n✅ Report saved to: {output_path}")
-    else:
-        # Print JSON to stdout
-        print(f"\n{'=' * 60}")
-        print("JSON REPORT")
-        print(f"{'=' * 60}")
-        print(json.dumps(report, indent=2))
+    # Output JSON to file (default: evaluation/report.json)
+    output_path = Path(args.output)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(output_path, "w") as f:
+        json.dump(report, f, indent=2)
+    print(f"\n✅ Report saved to: {output_path}")
     
     print(f"\n{'=' * 60}")
     print(f"EVALUATION COMPLETE")

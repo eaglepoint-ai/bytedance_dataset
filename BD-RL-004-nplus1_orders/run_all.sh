@@ -33,10 +33,7 @@ echo ""
 
 # Step 4: Run evaluation and generate report
 echo "Step 4: Running evaluation and generating report..."
-REPORT_DIR="evaluation/reports"
-mkdir -p "$REPORT_DIR"
-TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
-REPORT_FILE="$REPORT_DIR/evaluation_report_${TIMESTAMP}.json"
+REPORT_FILE="evaluation/report.json"
 
 # Build docker-compose services first
 docker compose build app > /dev/null 2>&1
