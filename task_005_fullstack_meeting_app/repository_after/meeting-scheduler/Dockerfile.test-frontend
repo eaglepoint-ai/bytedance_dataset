@@ -1,0 +1,22 @@
+# Dockerfile for Frontend TypeScript/React Tests (vitest)
+FROM node:20-alpine
+
+WORKDIR /workspace
+
+# Copy package files from tests directory (moved from root)
+COPY tests/package.json tests/package-lock.json* /workspace/
+
+# Install dependencies
+RUN npm install
+
+# Copy test configuration from tests directory
+COPY tests/vitest.config.ts /workspace/
+COPY tests/setup.ts /workspace/tests/
+COPY tests/frontend_*.test.* /workspace/tests/
+
+# Copy frontend source code that tests import
+COPY repository_after/meeting-scheduler/web/src /workspace/repository_after/meeting-scheduler/web/src
+
+# Default command
+CMD ["npm", "test"]
+

@@ -1,0 +1,25 @@
+# Dockerfile for Backend Python Tests (pytest)
+FROM python:3.12-slim
+
+WORKDIR /workspace
+
+# Install dependencies
+RUN pip install --no-cache-dir \
+    pytest \
+    pytest-asyncio \
+    pytest-anyio \
+    httpx \
+    sqlalchemy \
+    psycopg2-binary
+
+# Copy test files and required source code
+COPY tests/ /workspace/tests/
+COPY pytest.ini /workspace/
+COPY repository_after/meeting-scheduler/api/app /workspace/repository_after/meeting-scheduler/api/app
+
+# Set Python path
+ENV PYTHONPATH=/workspace
+
+# Default command (can be overridden)
+CMD ["pytest", "tests/test_backend_api.py", "tests/test_database.py", "-v"]
+

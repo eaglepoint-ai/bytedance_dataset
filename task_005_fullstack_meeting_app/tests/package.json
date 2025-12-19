@@ -1,0 +1,35 @@
+{
+  "name": "meeting-scheduler-tests",
+  "version": "1.0.0",
+  "description": "Frontend tests for Meeting Scheduler application",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:ui": "vitest --ui",
+    "test:coverage": "vitest run --coverage",
+    "test:unit": "vitest run frontend_unit.test.ts",
+    "test:components": "vitest run frontend_components.test.tsx",
+    "test:integration": "vitest run frontend_pages.integration.test.tsx"
+  },
+  "devDependencies": {
+    "@testing-library/jest-dom": "^6.1.5",
+    "@testing-library/react": "^14.1.2",
+    "@testing-library/user-event": "^14.5.1",
+    "@types/node": "^20.10.6",
+    "@types/react": "^18.2.46",
+    "@types/react-dom": "^18.2.18",
+    "@vitejs/plugin-react": "^4.2.1",
+    "@vitest/ui": "^1.1.0",
+    "jsdom": "^23.0.1",
+    "msw": "^2.0.11",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-router-dom": "^6.21.1",
+    "typescript": "^5.3.3",
+    "vite": "^5.0.10",
+    "vitest": "^1.1.0"
+  }
+}
+

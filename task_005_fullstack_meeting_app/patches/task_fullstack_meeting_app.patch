@@ -1,0 +1,3411 @@
+diff --git a/repository_after/meeting-scheduler/.env b/repository_after/meeting-scheduler/.env
+new file mode 100644
+index 0000000..c19f001
+--- /dev/null
++++ b/repository_after/meeting-scheduler/.env
+@@ -0,0 +1,26 @@
++# Shared
++POSTGRES_USER=postgres
++POSTGRES_PASSWORD=postgres
++POSTGRES_DB=meeting_scheduler
++POSTGRES_PORT=5432
++
++# Auth service
++AUTH_PORT=3001
++AUTH_JWT_SECRET=dev-secret-change-me
++AUTH_COOKIE_NAME=ms_session
++AUTH_DEV_MODE=1
++AUTH_CORS_ORIGIN=http://localhost:5173
++
++# API service
++API_PORT=8000
++API_CORS_ORIGIN=http://localhost:5173
++DATABASE_URL=postgresql+psycopg2://postgres:postgres@postgres:5432/meeting_scheduler
++AUTH_BASE_URL=http://auth:3001
++
++# Optional Google Calendar integration (leave empty for local dev)
++GOOGLE_SERVICE_ACCOUNT_JSON=
++GOOGLE_SERVICE_ACCOUNT_FILE=
++GOOGLE_CALENDAR_ID=primary
++
++# Optional: enable API test reset endpoint for e2e stability
++API_ENABLE_TEST_RESET=1
+diff --git a/repository_after/meeting-scheduler/.env.example b/repository_after/meeting-scheduler/.env.example
+new file mode 100644
+index 0000000..c19f001
+--- /dev/null
++++ b/repository_after/meeting-scheduler/.env.example
+@@ -0,0 +1,26 @@
++# Shared
++POSTGRES_USER=postgres
++POSTGRES_PASSWORD=postgres
++POSTGRES_DB=meeting_scheduler
++POSTGRES_PORT=5432
++
++# Auth service
++AUTH_PORT=3001
++AUTH_JWT_SECRET=dev-secret-change-me
++AUTH_COOKIE_NAME=ms_session
++AUTH_DEV_MODE=1
++AUTH_CORS_ORIGIN=http://localhost:5173
++
++# API service
++API_PORT=8000
++API_CORS_ORIGIN=http://localhost:5173
++DATABASE_URL=postgresql+psycopg2://postgres:postgres@postgres:5432/meeting_scheduler
++AUTH_BASE_URL=http://auth:3001
++
++# Optional Google Calendar integration (leave empty for local dev)
++GOOGLE_SERVICE_ACCOUNT_JSON=
++GOOGLE_SERVICE_ACCOUNT_FILE=
++GOOGLE_CALENDAR_ID=primary
++
++# Optional: enable API test reset endpoint for e2e stability
++API_ENABLE_TEST_RESET=1
+diff --git a/repository_after/meeting-scheduler/Dockerfile.test-backend b/repository_after/meeting-scheduler/Dockerfile.test-backend
+new file mode 100644
+index 0000000..2d78820
+--- /dev/null
++++ b/repository_after/meeting-scheduler/Dockerfile.test-backend
+@@ -0,0 +1,25 @@
++# Dockerfile for Backend Python Tests (pytest)
++FROM python:3.12-slim
++
++WORKDIR /workspace
++
++# Install dependencies
++RUN pip install --no-cache-dir \
++    pytest \
++    pytest-asyncio \
++    pytest-anyio \
++    httpx \
++    sqlalchemy \
++    psycopg2-binary
++
++# Copy test files and required source code
++COPY tests/ /workspace/tests/
++COPY pytest.ini /workspace/
++COPY repository_after/meeting-scheduler/api/app /workspace/repository_after/meeting-scheduler/api/app
++
++# Set Python path
++ENV PYTHONPATH=/workspace
++
++# Default command (can be overridden)
++CMD ["pytest", "tests/test_backend_api.py", "tests/test_database.py", "-v"]
++
+diff --git a/repository_after/meeting-scheduler/Dockerfile.test-frontend b/repository_after/meeting-scheduler/Dockerfile.test-frontend
+new file mode 100644
+index 0000000..32af153
+--- /dev/null
++++ b/repository_after/meeting-scheduler/Dockerfile.test-frontend
+@@ -0,0 +1,22 @@
++# Dockerfile for Frontend TypeScript/React Tests (vitest)
++FROM node:20-alpine
++
++WORKDIR /workspace
++
++# Copy package files from tests directory (moved from root)
++COPY tests/package.json tests/package-lock.json* /workspace/
++
++# Install dependencies
++RUN npm install
++
++# Copy test configuration from tests directory
++COPY tests/vitest.config.ts /workspace/
++COPY tests/setup.ts /workspace/tests/
++COPY tests/frontend_*.test.* /workspace/tests/
++
++# Copy frontend source code that tests import
++COPY repository_after/meeting-scheduler/web/src /workspace/repository_after/meeting-scheduler/web/src
++
++# Default command
++CMD ["npm", "test"]
++
+diff --git a/repository_after/meeting-scheduler/README.md b/repository_after/meeting-scheduler/README.md
+new file mode 100644
+index 0000000..df8379b
+--- /dev/null
++++ b/repository_after/meeting-scheduler/README.md
+@@ -0,0 +1,184 @@
++# Meeting Scheduler (React + FastAPI + Node Auth) — Docker Compose
++
++A complete local full‑stack app to:
++- View available consultation time slots
++- Book a slot (exclusive at DB level)
++- View/cancel your bookings (cancel re-opens slot)
++- (Optionally) create a Google Calendar event with a Google Meet link
++
++Includes:
++- **Auth service** (Node/TypeScript) with email/password, roles (user/consultant), and dev/test helpers
++- **API** (FastAPI) with Postgres constraints for slot exclusivity (partial unique index)
++- **Web** (Vite + React Router) responsive UI + stable `data-testid` selectors
++- **E2E** (Playwright) browser tests covering booking/cancel/consultant view
++
++> Note on “Better Auth”: this repo implements a small, Better-Auth-like auth service in Node/TS with `/api/auth/*` routes, cookie session + `/session`, roles, and dev/test helpers exactly as required.
++
++---
++
++## Repository Structure
++
++```text
++meeting-scheduler/
++  auth/   # Node/TS auth service
++  api/    # FastAPI backend
++  web/    # React frontend
++  e2e/    # Playwright browser tests
++```
++
++---
++
++## Quick Start
++
++### 1) Prereqs
++- Docker + Docker Compose (v2)
++- (Optional) Node 18+ if you want to run E2E from host instead of container
++
++### 2) Configure env
++Copy `.env.example` to `.env` (optional — defaults are usable).
++
++```bash
++cp .env.example .env
++```
++
++### 3) Start everything
++```bash
++docker compose up --build
++```
++
++Services will be available:
++- Web: http://localhost:5173
++- Auth: http://localhost:3001
++- API: http://localhost:8000
++
++Health checks:
++- API: http://localhost:8000/health
++
++---
++
++## Dev Convenience Actions
++
++### Create time slots (consultant-only)
++The API provides:
++- `POST /api/slots/seed` (consultant-only) — creates slots for the next 14 days, weekdays 09:00–17:00, 30-minute intervals.
++
++In local dev, you can:
++1) Create a consultant user (auth)
++2) Set role consultant (auth dev helper)
++3) Call seed slots (api)
++
++#### Create consultant (dev-only)
++```bash
++curl -s -X POST http://localhost:3001/api/auth/seed-consultant | jq
++```
++
++#### Set role consultant (dev-only)
++```bash
++curl -s -X POST http://localhost:3001/api/auth/test/set-role \
++  -H 'Content-Type: application/json' \
++  -d '{"email":"consultant@example.com","role":"consultant"}' | jq
++```
++
++Now login in the UI as:
++- email: `consultant@example.com`
++- password: `consultant123!`
++
++Then open `/consultant` and (optional) create slots from UI's "Create Slots" button (or curl below).
++
++#### Create slots from CLI (needs auth cookie)
++Use the UI for simplicity, or use a cookie jar:
++```bash
++# 1) Login and store cookies
++curl -c /tmp/cookies.txt -s -X POST http://localhost:3001/api/auth/login \
++  -H 'Content-Type: application/json' \
++  -d '{"email":"consultant@example.com","password":"consultant123!"}' | jq
++
++# 2) Create slots (forward cookies to API)
++curl -b /tmp/cookies.txt -s -X POST http://localhost:8000/api/slots/seed | jq
++```
++
++---
++
++## Google Calendar / Meet Integration (Optional)
++
++If configured, booking creates a Calendar event with conferenceData and stores:
++- `google_calendar_event_id`
++- `google_meet_link`
++
++If not configured, booking still succeeds and returns:
++- `google_meet_link: null`
++- `meet_status: "NOT_CONFIGURED"`
++
++### Env options
++Provide either:
++- `GOOGLE_SERVICE_ACCOUNT_JSON` (full JSON as a single string)
++or
++- `GOOGLE_SERVICE_ACCOUNT_FILE` (path inside the API container; you can mount it)
++
++And:
++- `GOOGLE_CALENDAR_ID` (recommended: shared calendar id; default is `"primary"`)
++
++If Google is not configured, the UI displays **“Meet link pending / not configured”**.
++
++---
++
++## API Contracts
++
++### Slot exclusivity (DB-level)
++A Postgres **partial unique index** guarantees:
++> Only one `BOOKED` meeting exists per slot at a time.
++
++If two requests try to book the same slot concurrently:
++- one succeeds
++- one returns **409**
++
++---
++
++## Run Backend Unit Tests
++
++```bash
++docker compose exec api pytest -q
++```
++
++Included tests:
++- booking same slot twice returns 409 (unique constraint enforced)
++- cancel re-opens slot (slot appears available again)
++
++---
++
++## Run E2E Tests (Playwright)
++
++### Option A (recommended): Run via Docker Compose profile
++```bash
++docker compose --profile e2e up --build --abort-on-container-exit e2e
++```
++
++### Option B: Run from host
++```bash
++cd e2e
++npm install
++npm run test:e2e
++```
++
++E2E covers:
++- Register → login → book first available slot
++- Slot exclusivity in UI: user A books; user B cannot see that slot
++- Cancel re-opens slot: user A cancels; user B sees slot again
++- Consultant dashboard: consultant sees booked consultations + join link
++
++---
++
++## Verify Slot Exclusivity Manually (Concurrency)
++1) Create slots (as consultant).
++2) Open two browser windows in different accounts.
++3) Try to book the same slot quickly.
++4) One will succeed, the other will see an error (409).
++
++---
++
++## Security Notes (Local Dev)
++- Session cookie is **httpOnly**, signed (JWT), and includes role.
++- CORS is restricted to the web origin in dev compose.
++- Dev/test helper endpoints only work when `AUTH_DEV_MODE=1`.
++
++---
+diff --git a/repository_after/meeting-scheduler/api/Dockerfile b/repository_after/meeting-scheduler/api/Dockerfile
+new file mode 100644
+index 0000000..ba43ec6
+--- /dev/null
++++ b/repository_after/meeting-scheduler/api/Dockerfile
+@@ -0,0 +1,15 @@
++FROM python:3.12-slim
++
++WORKDIR /app
++ENV PYTHONDONTWRITEBYTECODE=1
++ENV PYTHONUNBUFFERED=1
++
++RUN apt-get update && apt-get install -y --no-install-recommends build-essential curl && rm -rf /var/lib/apt/lists/*
++
++COPY requirements.txt .
++RUN pip install --no-cache-dir -r requirements.txt
++
++COPY app ./app
++
++EXPOSE 8000
++CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+diff --git a/repository_after/meeting-scheduler/api/app/__init__.py b/repository_after/meeting-scheduler/api/app/__init__.py
+new file mode 100644
+index 0000000..e69de29
+diff --git a/repository_after/meeting-scheduler/api/app/__pycache__/__init__.cpython-311.pyc b/repository_after/meeting-scheduler/api/app/__pycache__/__init__.cpython-311.pyc
+new file mode 100644
+index 0000000000000000000000000000000000000000..f172f4d59a5027673e8e2604fb601fd9915ab281
+GIT binary patch
+literal 234
+zcmXwzF$w}f3`J)YMFjC278)Bnu@G%V5bI&wjT+pYS!SZJh3D`H;<>zlU}t3p^g~{L
+zewu&p^}0$lqdBGhO!!Ox%)2e-rgF7W1HF2v(2)C`o}VjhBZdg2&0yiPbBT^4EbXDd
+zwI|20z=AFq?5;rA)r`4y8JgU(jmRK8neli60V^MgeW;DyGX^LTncQI*vm@r`LK0h%
+kOa;b}BQ|DK)t}C^^yxbbEoqbb#=hXy)LOsPAE7DP7tN<Z2mk;8
+
+literal 0
+HcmV?d00001
+
+diff --git a/repository_after/meeting-scheduler/api/app/__pycache__/crud.cpython-311.pyc b/repository_after/meeting-scheduler/api/app/__pycache__/crud.cpython-311.pyc
+new file mode 100644
+index 0000000000000000000000000000000000000000..15c1355b7956b04fb2d27ebd80301fe024d30bb9
+GIT binary patch
+literal 11257
+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
+Ote&w(>sJjl(EkBb>d~11
+
+literal 0
+HcmV?d00001
+
+diff --git a/repository_after/meeting-scheduler/api/app/__pycache__/google_calendar.cpython-311.pyc b/repository_after/meeting-scheduler/api/app/__pycache__/google_calendar.cpython-311.pyc
+new file mode 100644
+index 0000000000000000000000000000000000000000..0f3d4d6d17e6c4a1844641c2a1b220521ee2582f
+GIT binary patch
+literal 4305
+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
+F{{hIrAf*5R
+
+literal 0
+HcmV?d00001
+
+diff --git a/repository_after/meeting-scheduler/api/app/__pycache__/models.cpython-311.pyc b/repository_after/meeting-scheduler/api/app/__pycache__/models.cpython-311.pyc
+new file mode 100644
+index 0000000000000000000000000000000000000000..71106b1b74937c0042ce2716f69dcedf8bf83b8c
+GIT binary patch
+literal 4894
+zcmcgwOH3Qv8J;oYCpPa82w*}WSC~AU=WUvj7O)|t;gRz0+(@Irb0AJ;Y;ru#tG$(_
+zcEKVG7Ll&6)CHBQ)KOTlWXUqinQ9i+tdP2DSD>)EtN#D74cO+YYNOuq@#iz={O6zl
+zoSFao&iHSEfRBS?CN~oQE7bmhC#AzxtbG0#RKDXBPT^HfEd25!59bcmp*chck8L$-
+zjV6eK<`kWpOLS>&(XDwzkLDG<nosm;wPG!^6I8zz5Cg34RO_^Qv0iHs8?;8TQEL*L
+zc+SDy=M>kUIK@rs-`8;5NB9;Fv6=OGpwCNM2=}xUA@^PYJNOpu&M-S4*wvEe3LmYk
+z&kucps=l)dKg)&c{)uj;LcHx!WS!`7jf6b5dnB1uiJY)KQD~flMq3z7q&3?&mZT)U
+zns`WF+pbxi#uKZyFh^eLcEfxk{ya@0$wW%0ay+5i&IbvFyaLa{{QQGxNU-apB&Nz#
+z*5fb8h@2v}Yf@fYBZ?i+*sl~zs%b4@`zcYu2s}NBuf>Y<WIufI<Z~TVzT*gocSdxu
+znK*0#olb>nY>y-*WQ|CY?UN)esiak``z7glT2>1^AGpux>xbWk=Tn5H!kQclN0YI%
+zMiP1|JSwlM<WUl45snfS!lm-EO2W&pb)v|L7?EJD;97bZ@R@Y&+U+nUYspkxPtw<t
+zyrL5t)(9+SV)aTY_Jm*nG%T;h;ky=wfQXv9y7rnjK?Dr2lBx&D9DVYFCljS-OBSau
+zLo0NjTn4d5afpIa12<N%1CxaiW_4Llr)<~A^z_5gsO^aiPen#2Mx#?9Cv8UmEeK~2
+zIuJS$&~xGHZCE>30&GuV(}_p}XEI~?`u5B?ehP!ozAR)XG~n_1uH$6L^N?p^je{cs
+ze4UD8tL8o2<Bz5L3|U89Pu+!~9JeJ@Jl`JTh5nLnuDxW)5uf55gtMaOTJY?u@a*35
+zyoXpm!nbgUe()A3^WpukebiO?@RfX!dc_TK)K<))0Y)^IUDbayq6zFPqihEI7A5co
+zR;6rIU1=1|`PBK6z*D@*?5K*OwJPrVFY<S`%3nj#Uz^gXG;K9ktbIG!pHoh(L)qL~
+zaI6x5$NG%zK{}dMle+Cgwvtj%P0fAaZMU3~(&@PJ!C}{~(YPi<E<OXEaw}v-POG}@
+zfIi?k9Q7udAY*uvNUJL5w(UvjGSwwnw_PNm!0!hK4Z&4uAAs$RrzAOs#5H9HV!%w`
+zPfqAkT(NyIN`NGBi0w<SA&auQyO@5qfDyvA>Xzl$GifckmIihsDce(|h*YSfA`k6=
+zB<UDcfvYGo1NCDZ0#49&BHp4Gu^E}ru9qY^kw`+KBWp?$#gw1}2q-A@5`utm1;7@T
+zf!?VH&#&Tn4N$i2O6##i@+A#p^EHG9gxhE!sBti<;DjJ{BOq&}vXHaKoRH!2E$1_n
+zd!3=|WUepQx2+okgXX}XH8A+8&schFEiD_JF|#vfb;dFy>#lYE?Q6@^ZU`|brVz{b
+zT;1%-y~@4XZ85@QW_ZjBj~TyNFnSivo<*x?F*Cltvaw{<1r1>liYYASyDw+I%`N4Y
+zc68%P)Vvb4u0%hjjqZ7~d*14v&y1~)ZQQZ^orW+E#T4fA!An^!cYlX`nlpkkW^l#|
+z&SV~}zt~XT{@xH~pqRo;zW;VEu)VUY8~qbz|Af^)k(u21I@`M`d_Q0{Uo?aXD5fy6
+z*L!XA-get|+wLvn`nY+0+`2w)%q|(rPp#$WMlUscsnts}zus_dys{e38v=!53N-&e
+zj@#?MmGf`^_R|Zaf5Gfuu=*F+ip*t0?<A`Z;#z=WGK5NjlkrxSadL@QKli~yax5c1
+z5htI*_Kdk)N)<CJ-Ys7RYa&;>euVjJOUy+AY-BmhBSY7hvCA>vo@S5yTy7sY^51xh
+z|E4PYlg!)<++DxbP|kk1!#lyvjTLi6Zf+@yxalZ@04Rj7+?$BpTdy=%DFkCtR76;p
+z>QQY!GU`m}S}?L5#<f=HDDd`EWB_(-RmR>4UeA@qe)fy}byfLmEBXs6?Fzqju3{~^
+z!Tx;N^*f68JxZqnI!RhjuKhE%8`$b9-(#=v;svD{)F()<!!#Ku&e8K&y?}s3{3dX$
+zMpuEO-I3wh$Z&Kt1R|4!jj&2|GDiEs(srXDpmey?u=ivd!YV|Q<EmY&kW`Gu*O1EX
+zx}ru%piZ!f17`wi0=<lWT!qFdyKOa@gbk|{lR+{RnM&jZY-7=JL$L?lNNPOsjDCdy
+zA9Fk-@tfFo16>B=ucVSJF=drNDxQI$rP=O2<N%pqHM;@!yZS06spqQn@(H0N)LWrq
+z^lNl`q+Rr9czOrnNVw?F@f3N84kIv08o}Bx5F!X(geU^O0Tp(lY@d1`Psb4+ATY^e
+zYKJ%Y#1xr~;p~`L(ORh4bwz=dWV(uaSs`ugE+e3XrZVtQluKLi3#4t2Nt>S2ccMmk
+z*bEO_;o;r8yLUe&jVI5I2sI<riqL(I`vV_wz|V!K<AC8I!_58lg^lRD2UZ{moz5tl
+z0D=i%zN0^TFW0(r(dZa5JBF-|A!Z(V`;8$CK{17)g6xg$%p1Xo8H`xL2veohyIMnt
+zKrw|#K}zR#Mvd+fvwOtq9?3l1XwBBV>o9~7D5fy7*LQt$a=Q;c-x?3UF>X9IZ#=ec
+zJT_KU2<IgqbwIE$`G*+X#R&`!5Sjp)5Z|->Js9@{i=G)keedSb_PyO!V`jm)xoF;8
+zv~Gg7cV<^MXLGmyB3i*~$6|l!PVU}LD{Lh$O`DgdtxMB}(6X_To!z|ky=b-e8v-;;
+zo5J)@uFGAa?Bm?Pu4r^UGP@pGU5_%+^{+PCEZ;dpcm%~19_@QLZ{4~x@4uY)pUF3$
+z%?JB(0jq!T@4>-+uhZ*0-~bL0_MM(qS7r)71qsJTGSp@Z1m499`GgO=?SmwgRd~_V
+zUKe(GEEib1u-sy4#qtRL_TUN`5Ii1pRfz*}#B_KkJ<93AcC+q;QIcvjfWvXeSxD;!
+ztg)9^magn2kr4{US&>secm@k^;=iOb(2H+)sXqel*YG@_=V~+TbE48^aAjrR;pO3R
+z`Ts%-$6qtJ@X3<rrj7qp_FX*h-RG)d{Z|LrdU)LBaq#E%xoX&mWLy5+et<oP$K5_Z
+jzsT=%r{lVQz<Lf(_6Iw8*FIMb>&gMP9-h+0o~?faIBKuT
+
+literal 0
+HcmV?d00001
+
+diff --git a/repository_after/meeting-scheduler/api/app/auth_client.py b/repository_after/meeting-scheduler/api/app/auth_client.py
+new file mode 100644
+index 0000000..9e79e6c
+--- /dev/null
++++ b/repository_after/meeting-scheduler/api/app/auth_client.py
+@@ -0,0 +1,27 @@
++from __future__ import annotations
++
++import requests
++from fastapi import Request
++from .config import settings
++
++
++class AuthError(Exception):
++    pass
++
++
++def fetch_session(request: Request) -> dict:
++    # Forward cookies + Authorization header to auth service /session endpoint
++    headers = {}
++    if request.headers.get("authorization"):
++        headers["authorization"] = request.headers["authorization"]
++
++    # requests needs cookie dict; forward raw Cookie header is easiest
++    if request.headers.get("cookie"):
++        headers["cookie"] = request.headers["cookie"]
++
++    url = f"{settings.auth_base_url}/api/auth/session"
++    resp = requests.get(url, headers=headers, timeout=5)
++
++    if resp.status_code != 200:
++        raise AuthError("unauthorized")
++    return resp.json()
+diff --git a/repository_after/meeting-scheduler/api/app/config.py b/repository_after/meeting-scheduler/api/app/config.py
+new file mode 100644
+index 0000000..614ca86
+--- /dev/null
++++ b/repository_after/meeting-scheduler/api/app/config.py
+@@ -0,0 +1,22 @@
++from pydantic_settings import BaseSettings, SettingsConfigDict
++from pydantic import Field
++
++
++class Settings(BaseSettings):
++    model_config = SettingsConfigDict(env_file=None)
++
++    api_port: int = Field(default=8000, alias="API_PORT")
++    api_cors_origin: str = Field(default="http://localhost:5173", alias="API_CORS_ORIGIN")
++
++    database_url: str = Field(..., alias="DATABASE_URL")
++
++    auth_base_url: str = Field(default="http://auth:3001", alias="AUTH_BASE_URL")
++
++    google_service_account_json: str | None = Field(default=None, alias="GOOGLE_SERVICE_ACCOUNT_JSON")
++    google_service_account_file: str | None = Field(default=None, alias="GOOGLE_SERVICE_ACCOUNT_FILE")
++    google_calendar_id: str = Field(default="primary", alias="GOOGLE_CALENDAR_ID")
++
++    api_enable_test_reset: bool = Field(default=False, alias="API_ENABLE_TEST_RESET")
++
++
++settings = Settings()
+diff --git a/repository_after/meeting-scheduler/api/app/crud.py b/repository_after/meeting-scheduler/api/app/crud.py
+new file mode 100644
+index 0000000..54c7416
+--- /dev/null
++++ b/repository_after/meeting-scheduler/api/app/crud.py
+@@ -0,0 +1,234 @@
++from __future__ import annotations
++
++from datetime import datetime, timedelta, timezone
++from uuid import UUID
++from sqlalchemy import and_, func, select
++from sqlalchemy.exc import IntegrityError
++from sqlalchemy.orm import Session
++
++from .models import TimeSlot, Meeting, MeetingStatus
++
++# Optional Google Calendar integration
++try:
++    from .google_calendar import create_calendar_event_with_meet, is_configured
++    GOOGLE_CALENDAR_AVAILABLE = True
++except ImportError:
++    GOOGLE_CALENDAR_AVAILABLE = False
++    create_calendar_event_with_meet = None
++    is_configured = lambda: False
++
++
++def list_available_slots(db: Session, from_dt: datetime, to_dt: datetime, consultant_id: str | None = None) -> list[TimeSlot]:
++    # active slots with no BOOKED meeting
++    subq = (
++        select(Meeting.slot_id)
++        .where(Meeting.status == MeetingStatus.BOOKED)
++        .subquery()
++    )
++    conditions = [
++        TimeSlot.is_active.is_(True),
++        TimeSlot.start_at >= from_dt,
++        TimeSlot.end_at <= to_dt,
++        TimeSlot.id.not_in(select(subq.c.slot_id)),
++    ]
++    if consultant_id:
++        conditions.append(TimeSlot.consultant_id == consultant_id)
++    
++    q = (
++        select(TimeSlot)
++        .where(and_(*conditions))
++        .order_by(TimeSlot.start_at.asc())
++    )
++    return list(db.execute(q).scalars().all())
++
++
++def seed_slots_next_14_days(db: Session) -> int:
++    # Weekdays only, 09:00–17:00, 30-minute intervals
++    now = datetime.now(timezone.utc)
++    start_day = now.date()
++    total = 0
++
++    for day_offset in range(0, 14):
++        d = start_day + timedelta(days=day_offset)
++        # weekday: Mon=0..Sun=6; keep Mon-Fri
++        if d.weekday() >= 5:
++            continue
++        # Build intervals
++        # 09:00 to 17:00 (end exclusive)
++        for minutes in range(9 * 60, 17 * 60, 30):
++            start_at = datetime(d.year, d.month, d.day, 0, 0, tzinfo=timezone.utc) + timedelta(minutes=minutes)
++            end_at = start_at + timedelta(minutes=30)
++
++            exists = db.execute(
++                select(TimeSlot.id).where(TimeSlot.start_at == start_at, TimeSlot.end_at == end_at)
++            ).first()
++            if exists:
++                continue
++
++            slot = TimeSlot(start_at=start_at, end_at=end_at, is_active=True)
++            db.add(slot)
++            total += 1
++
++    db.commit()
++    return total
++
++
++def create_slots(
++    db: Session,
++    start_date: str,
++    end_date: str,
++    consultant_id: str,
++    start_time: str = "09:00",
++    end_time: str = "17:00",
++    skip_weekends: bool = True,
++) -> int:
++    """Create 30-minute slots for the specified date range and time range."""
++    from datetime import date
++    
++    # Parse dates (YYYY-MM-DD format)
++    start_dt = date.fromisoformat(start_date)
++    end_dt = date.fromisoformat(end_date)
++    
++    if end_dt < start_dt:
++        raise ValueError("End date must be after or equal to start date")
++    
++    # Parse times (HH:MM format)
++    start_hour, start_min = map(int, start_time.split(":"))
++    end_hour, end_min = map(int, end_time.split(":"))
++    
++    start_minutes = start_hour * 60 + start_min
++    end_minutes = end_hour * 60 + end_min
++    
++    if end_minutes <= start_minutes:
++        raise ValueError("End time must be after start time")
++    
++    total = 0
++    current_date = start_dt
++    
++    while current_date <= end_dt:
++        # Skip weekends if requested
++        if skip_weekends and current_date.weekday() >= 5:
++            current_date += timedelta(days=1)
++            continue
++        
++        # Create 30-minute slots for this day
++        for minutes in range(start_minutes, end_minutes, 30):
++            start_at = datetime(
++                current_date.year,
++                current_date.month,
++                current_date.day,
++                0,
++                0,
++                tzinfo=timezone.utc
++            ) + timedelta(minutes=minutes)
++            end_at = start_at + timedelta(minutes=30)
++            
++            # Check if slot already exists for this consultant
++            exists = db.execute(
++                select(TimeSlot.id).where(
++                    TimeSlot.start_at == start_at,
++                    TimeSlot.end_at == end_at,
++                    TimeSlot.consultant_id == consultant_id
++                )
++            ).first()
++            if exists:
++                continue
++            
++            slot = TimeSlot(start_at=start_at, end_at=end_at, is_active=True, consultant_id=consultant_id)
++            db.add(slot)
++            total += 1
++        
++        current_date += timedelta(days=1)
++    
++    db.commit()
++    return total
++
++
++def create_meeting_booked(
++    db: Session,
++    *,
++    slot_id: UUID,
++    user_id: str,
++    user_email: str,
++    description: str,
++) -> tuple[Meeting, str | None]:
++    # Validate slot exists and active
++    slot = db.get(TimeSlot, slot_id)
++    if not slot or not slot.is_active:
++        raise ValueError("slot_not_found_or_inactive")
++
++    meeting = Meeting(
++        slot_id=slot_id,
++        user_id=user_id,
++        user_email=user_email,
++        description=description,
++        status=MeetingStatus.BOOKED,
++    )
++    db.add(meeting)
++
++    try:
++        db.flush()  # triggers partial unique index enforcement
++    except IntegrityError:
++        db.rollback()
++        raise RuntimeError("slot_already_booked")
++
++    meet_status: str | None = None
++
++    # Google Calendar integration (best-effort)
++    try:
++        if is_configured():
++            event_id, meet_link = create_calendar_event_with_meet(
++                start_at=slot.start_at,
++                end_at=slot.end_at,
++                user_email=user_email,
++                description=description,
++            )
++            meeting.google_calendar_event_id = event_id
++            meeting.google_meet_link = meet_link
++            meet_status = "OK" if meet_link else "ERROR"
++        else:
++            meet_status = "NOT_CONFIGURED"
++    except Exception:
++        meet_status = "ERROR"
++
++    db.commit()
++    db.refresh(meeting)
++    return meeting, meet_status
++
++
++def list_my_meetings(db: Session, user_id: str) -> list[tuple[Meeting, TimeSlot]]:
++    q = (
++        select(Meeting, TimeSlot)
++        .join(TimeSlot, TimeSlot.id == Meeting.slot_id)
++        .where(Meeting.user_id == user_id)
++        .order_by(TimeSlot.start_at.desc())
++    )
++    return list(db.execute(q).all())
++
++
++def cancel_meeting(db: Session, meeting_id: UUID, user_id: str) -> Meeting:
++    meeting = db.get(Meeting, meeting_id)
++    if not meeting or meeting.user_id != user_id:
++        raise ValueError("meeting_not_found")
++    if meeting.status == MeetingStatus.CANCELED:
++        return meeting
++
++    meeting.status = MeetingStatus.CANCELED
++    db.commit()
++    db.refresh(meeting)
++    return meeting
++
++
++def list_admin_meetings(db: Session) -> list[tuple[Meeting, TimeSlot]]:
++    q = (
++        select(Meeting, TimeSlot)
++        .join(TimeSlot, TimeSlot.id == Meeting.slot_id)
++        .order_by(TimeSlot.start_at.desc())
++    )
++    return list(db.execute(q).all())
++
++
++def reset_all(db: Session) -> None:
++    db.query(Meeting).delete()
++    db.query(TimeSlot).delete()
++    db.commit()
+diff --git a/repository_after/meeting-scheduler/api/app/db.py b/repository_after/meeting-scheduler/api/app/db.py
+new file mode 100644
+index 0000000..2aea345
+--- /dev/null
++++ b/repository_after/meeting-scheduler/api/app/db.py
+@@ -0,0 +1,6 @@
++from sqlalchemy import create_engine
++from sqlalchemy.orm import sessionmaker
++from .config import settings
++
++engine = create_engine(settings.database_url, pool_pre_ping=True)
++SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+diff --git a/repository_after/meeting-scheduler/api/app/deps.py b/repository_after/meeting-scheduler/api/app/deps.py
+new file mode 100644
+index 0000000..f39c978
+--- /dev/null
++++ b/repository_after/meeting-scheduler/api/app/deps.py
+@@ -0,0 +1,30 @@
++from fastapi import Depends, HTTPException, Request
++from sqlalchemy.orm import Session
++from .db import SessionLocal
++from .auth_client import fetch_session, AuthError
++from .schemas import UserOut
++
++
++def get_db():
++    db = SessionLocal()
++    try:
++        yield db
++    finally:
++        db.close()
++
++
++def get_current_user(request: Request) -> UserOut:
++    try:
++        payload = fetch_session(request)
++        user = payload.get("user")
++        if not user:
++            raise AuthError("unauthorized")
++        return UserOut(**user)
++    except AuthError:
++        raise HTTPException(status_code=401, detail="Unauthorized")
++
++
++def require_consultant(user: UserOut = Depends(get_current_user)) -> UserOut:
++    if user.role != "consultant":
++        raise HTTPException(status_code=403, detail="Consultant only")
++    return user
+diff --git a/repository_after/meeting-scheduler/api/app/google_calendar.py b/repository_after/meeting-scheduler/api/app/google_calendar.py
+new file mode 100644
+index 0000000..92d7c89
+--- /dev/null
++++ b/repository_after/meeting-scheduler/api/app/google_calendar.py
+@@ -0,0 +1,93 @@
++from __future__ import annotations
++
++import json
++import os
++import uuid
++from datetime import datetime
++from typing import Optional, Tuple
++
++from google.oauth2 import service_account
++from googleapiclient.discovery import build
++
++from .config import settings
++
++
++def _load_service_account_info() -> Optional[dict]:
++    if settings.google_service_account_json:
++        try:
++            return json.loads(settings.google_service_account_json)
++        except json.JSONDecodeError:
++            return None
++    if settings.google_service_account_file:
++        path = settings.google_service_account_file
++        if os.path.exists(path):
++            with open(path, "r", encoding="utf-8") as f:
++                try:
++                    return json.load(f)
++                except json.JSONDecodeError:
++                    return None
++    return None
++
++
++def is_configured() -> bool:
++    return _load_service_account_info() is not None and bool(settings.google_calendar_id)
++
++
++def create_calendar_event_with_meet(
++    *,
++    start_at: datetime,
++    end_at: datetime,
++    user_email: str,
++    description: str,
++) -> Tuple[Optional[str], Optional[str]]:
++    """Returns (event_id, meet_link). If not configured, returns (None, None)."""
++    info = _load_service_account_info()
++    if not info:
++        return None, None
++
++    creds = service_account.Credentials.from_service_account_info(
++        info,
++        scopes=["https://www.googleapis.com/auth/calendar"],
++    )
++
++    service = build("calendar", "v3", credentials=creds, cache_discovery=False)
++
++    request_id = uuid.uuid4().hex
++    event = {
++        "summary": "Consultation",
++        "description": description,
++        "start": {"dateTime": start_at.isoformat()},
++        "end": {"dateTime": end_at.isoformat()},
++        "attendees": [{"email": user_email}],
++        "conferenceData": {
++            "createRequest": {
++                "requestId": request_id,
++                "conferenceSolutionKey": {"type": "hangoutsMeet"},
++            }
++        },
++    }
++
++    created = (
++        service.events()
++        .insert(
++            calendarId=settings.google_calendar_id,
++            body=event,
++            conferenceDataVersion=1,
++            sendUpdates="none",
++        )
++        .execute()
++    )
++
++    event_id = created.get("id")
++
++    # Prefer hangoutLink, fallback to conferenceData entryPoints
++    meet_link = created.get("hangoutLink")
++    if not meet_link:
++        conf = created.get("conferenceData") or {}
++        entry_points = conf.get("entryPoints") or []
++        for ep in entry_points:
++            if ep.get("entryPointType") == "video" and ep.get("uri"):
++                meet_link = ep["uri"]
++                break
++
++    return event_id, meet_link
+diff --git a/repository_after/meeting-scheduler/api/app/main.py b/repository_after/meeting-scheduler/api/app/main.py
+new file mode 100644
+index 0000000..9aa7926
+--- /dev/null
++++ b/repository_after/meeting-scheduler/api/app/main.py
+@@ -0,0 +1,83 @@
++from fastapi import FastAPI
++from fastapi.middleware.cors import CORSMiddleware
++from sqlalchemy import text
++from .config import settings
++from .db import engine
++from .models import Base
++from .routes.slots import router as slots_router
++from .routes.meetings import router as meetings_router
++from .routes.admin import router as admin_router
++from .routes.test_helpers import router as test_router
++
++
++app = FastAPI(title="Meeting Scheduler API")
++
++
++app.add_middleware(
++    CORSMiddleware,
++    allow_origins=[settings.api_cors_origin],
++    allow_credentials=True,
++    allow_methods=["*"],
++    allow_headers=["*"],
++)
++
++
++@app.get("/health")
++def health():
++    return {"ok": True}
++
++
++@app.on_event("startup")
++def startup():
++    # Create tables
++    Base.metadata.create_all(bind=engine)
++
++    # Add consultant_id column to time_slots if it doesn't exist (migration)
++    try:
++        with engine.begin() as conn:
++            conn.execute(text("""
++                DO $$
++                BEGIN
++                    IF NOT EXISTS (
++                        SELECT 1
++                        FROM information_schema.columns
++                        WHERE table_name = 'time_slots'
++                        AND column_name = 'consultant_id'
++                    ) THEN
++                        ALTER TABLE time_slots
++                        ADD COLUMN consultant_id VARCHAR;
++                    END IF;
++                END$$;
++            """))
++    except Exception:
++        # Non-Postgres or already exists
++        pass
++
++    # Ensure Postgres partial unique index exists (for slot exclusivity)
++    # If using SQLite (tests), Index in models is ignored and this statement will fail; ignore.
++    try:
++        with engine.begin() as conn:
++            conn.execute(text("""
++                DO $$
++                BEGIN
++                    IF NOT EXISTS (
++                        SELECT 1
++                        FROM pg_indexes
++                        WHERE schemaname = 'public'
++                        AND indexname = 'ux_meetings_slot_booked'
++                    ) THEN
++                        CREATE UNIQUE INDEX ux_meetings_slot_booked
++                        ON meetings (slot_id)
++                        WHERE status = 'BOOKED';
++                    END IF;
++                END$$;
++            """))
++    except Exception:
++        # Non-Postgres or already exists
++        pass
++
++
++app.include_router(slots_router)
++app.include_router(meetings_router)
++app.include_router(admin_router)
++app.include_router(test_router)
+diff --git a/repository_after/meeting-scheduler/api/app/models.py b/repository_after/meeting-scheduler/api/app/models.py
+new file mode 100644
+index 0000000..f83a789
+--- /dev/null
++++ b/repository_after/meeting-scheduler/api/app/models.py
+@@ -0,0 +1,70 @@
++import enum
++import uuid
++from datetime import datetime
++from sqlalchemy import (
++    Boolean,
++    DateTime,
++    Enum,
++    ForeignKey,
++    String,
++    Text,
++    UniqueConstraint,
++    Index,
++)
++from sqlalchemy.dialects.postgresql import UUID
++from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
++
++
++class Base(DeclarativeBase):
++    pass
++
++
++class MeetingStatus(str, enum.Enum):
++    BOOKED = "BOOKED"
++    CANCELED = "CANCELED"
++
++
++class TimeSlot(Base):
++    __tablename__ = "time_slots"
++
++    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
++    start_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
++    end_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
++    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
++    consultant_id: Mapped[str | None] = mapped_column(String, nullable=True)  # User ID of the consultant who created this slot
++
++    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=datetime.utcnow)
++    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=datetime.utcnow)
++
++    meetings: Mapped[list["Meeting"]] = relationship("Meeting", back_populates="slot")
++
++
++class Meeting(Base):
++    __tablename__ = "meetings"
++
++    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
++
++    slot_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("time_slots.id", ondelete="CASCADE"), nullable=False)
++    user_id: Mapped[str] = mapped_column(String, nullable=False)
++    user_email: Mapped[str] = mapped_column(String, nullable=False)
++    description: Mapped[str] = mapped_column(Text, nullable=False)
++
++    status: Mapped[MeetingStatus] = mapped_column(Enum(MeetingStatus, name="meeting_status"), nullable=False, default=MeetingStatus.BOOKED)
++
++    google_calendar_event_id: Mapped[str | None] = mapped_column(String, nullable=True)
++    google_meet_link: Mapped[str | None] = mapped_column(String, nullable=True)
++
++    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=datetime.utcnow)
++    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=datetime.utcnow)
++
++    slot: Mapped[TimeSlot] = relationship("TimeSlot", back_populates="meetings")
++
++    __table_args__ = (
++        # Partial unique index is created in init SQL (Postgres-specific) for status='BOOKED'
++        Index(
++            "ix_meetings_slot_booked_unique",
++            "slot_id",
++            unique=True,
++            postgresql_where=(status == MeetingStatus.BOOKED),
++        ),
++    )
+diff --git a/repository_after/meeting-scheduler/api/app/routes/__init__.py b/repository_after/meeting-scheduler/api/app/routes/__init__.py
+new file mode 100644
+index 0000000..e69de29
+diff --git a/repository_after/meeting-scheduler/api/app/routes/admin.py b/repository_after/meeting-scheduler/api/app/routes/admin.py
+new file mode 100644
+index 0000000..65ec231
+--- /dev/null
++++ b/repository_after/meeting-scheduler/api/app/routes/admin.py
+@@ -0,0 +1,30 @@
++from fastapi import APIRouter, Depends
++from sqlalchemy.orm import Session
++
++from ..deps import get_db, require_consultant
++from ..schemas import AdminMeetingOut, UserOut
++from ..crud import list_admin_meetings
++
++router = APIRouter(prefix="/api/admin", tags=["admin"])
++
++
++@router.get("/meetings", response_model=list[AdminMeetingOut])
++def meetings(
++    _consultant: UserOut = Depends(require_consultant),
++    db: Session = Depends(get_db),
++):
++    rows = list_admin_meetings(db)
++    out: list[AdminMeetingOut] = []
++    for meeting, slot in rows:
++        out.append(
++            AdminMeetingOut(
++                id=meeting.id,
++                start_at=slot.start_at,
++                end_at=slot.end_at,
++                user_email=meeting.user_email,
++                description=meeting.description,
++                status=meeting.status.value,
++                google_meet_link=meeting.google_meet_link,
++            )
++        )
++    return out
+diff --git a/repository_after/meeting-scheduler/api/app/routes/meetings.py b/repository_after/meeting-scheduler/api/app/routes/meetings.py
+new file mode 100644
+index 0000000..0d3bcd6
+--- /dev/null
++++ b/repository_after/meeting-scheduler/api/app/routes/meetings.py
+@@ -0,0 +1,79 @@
++from uuid import UUID
++from fastapi import APIRouter, Depends, HTTPException
++from sqlalchemy.orm import Session
++
++from ..deps import get_db, get_current_user
++from ..schemas import CreateMeetingIn, MeetingOut, UserOut
++from ..crud import create_meeting_booked, list_my_meetings, cancel_meeting
++
++router = APIRouter(prefix="/api/meetings", tags=["meetings"])
++
++
++@router.post("", response_model=MeetingOut)
++def create_meeting(
++    body: CreateMeetingIn,
++    user: UserOut = Depends(get_current_user),
++    db: Session = Depends(get_db),
++):
++    try:
++        meeting, meet_status = create_meeting_booked(
++            db,
++            slot_id=body.slot_id,
++            user_id=user.id,
++            user_email=user.email,
++            description=body.description,
++        )
++    except ValueError as e:
++        raise HTTPException(status_code=404, detail=str(e))
++    except RuntimeError:
++        raise HTTPException(status_code=409, detail="Slot already booked")
++
++    slot = meeting.slot
++    return MeetingOut(
++        id=meeting.id,
++        slot_id=meeting.slot_id,
++        start_at=slot.start_at,
++        end_at=slot.end_at,
++        user_email=meeting.user_email,
++        description=meeting.description,
++        status=meeting.status.value,
++        google_meet_link=meeting.google_meet_link,
++        meet_status=meet_status,
++    )
++
++
++@router.get("/me", response_model=list[MeetingOut])
++def my_meetings(
++    user: UserOut = Depends(get_current_user),
++    db: Session = Depends(get_db),
++):
++    rows = list_my_meetings(db, user_id=user.id)
++    out: list[MeetingOut] = []
++    for meeting, slot in rows:
++        out.append(
++            MeetingOut(
++                id=meeting.id,
++                slot_id=meeting.slot_id,
++                start_at=slot.start_at,
++                end_at=slot.end_at,
++                user_email=meeting.user_email,
++                description=meeting.description,
++                status=meeting.status.value,
++                google_meet_link=meeting.google_meet_link,
++                meet_status=None,
++            )
++        )
++    return out
++
++
++@router.post("/{meeting_id}/cancel")
++def cancel(
++    meeting_id: UUID,
++    user: UserOut = Depends(get_current_user),
++    db: Session = Depends(get_db),
++):
++    try:
++        meeting = cancel_meeting(db, meeting_id=meeting_id, user_id=user.id)
++        return {"ok": True, "status": meeting.status.value}
++    except ValueError:
++        raise HTTPException(status_code=404, detail="Not found")
+diff --git a/repository_after/meeting-scheduler/api/app/routes/slots.py b/repository_after/meeting-scheduler/api/app/routes/slots.py
+new file mode 100644
+index 0000000..1097772
+--- /dev/null
++++ b/repository_after/meeting-scheduler/api/app/routes/slots.py
+@@ -0,0 +1,88 @@
++from datetime import datetime, timezone
++from fastapi import APIRouter, Depends, Query, HTTPException
++from sqlalchemy.orm import Session
++from dateutil import parser as dtparser
++
++from ..deps import get_db, require_consultant
++from ..schemas import SlotOut, UserOut, CreateSlotsIn, ConsultantOut
++from ..crud import list_available_slots, seed_slots_next_14_days, create_slots
++from fastapi import Request
++
++router = APIRouter(prefix="/api/slots", tags=["slots"])
++
++
++@router.get("", response_model=list[SlotOut])
++def get_slots(
++    from_: str = Query(alias="from"),
++    to: str = Query(),
++    consultant_id: str | None = Query(None),
++    db: Session = Depends(get_db),
++):
++    try:
++        from_dt = dtparser.isoparse(from_).astimezone(timezone.utc)
++        to_dt = dtparser.isoparse(to).astimezone(timezone.utc)
++    except Exception:
++        raise HTTPException(status_code=400, detail="Invalid datetime range")
++
++    if to_dt <= from_dt:
++        raise HTTPException(status_code=400, detail="Invalid datetime range")
++
++    slots = list_available_slots(db, from_dt=from_dt, to_dt=to_dt, consultant_id=consultant_id)
++    return [SlotOut(id=s.id, start_at=s.start_at, end_at=s.end_at) for s in slots]
++
++
++@router.post("/seed")
++def seed_slots(
++    _consultant: UserOut = Depends(require_consultant),
++    db: Session = Depends(get_db),
++):
++    count = seed_slots_next_14_days(db)
++    return {"ok": True, "created": count}
++
++
++@router.post("/create")
++def create_slots_endpoint(
++    body: CreateSlotsIn,
++    consultant: UserOut = Depends(require_consultant),
++    db: Session = Depends(get_db),
++):
++    try:
++        count = create_slots(
++            db,
++            start_date=body.start_date,
++            end_date=body.end_date,
++            consultant_id=consultant.id,
++            start_time=body.start_time,
++            end_time=body.end_time,
++            skip_weekends=body.skip_weekends,
++        )
++        return {"ok": True, "created": count}
++    except ValueError as e:
++        raise HTTPException(status_code=400, detail=str(e))
++    except Exception as e:
++        raise HTTPException(status_code=500, detail=f"Failed to create slots: {str(e)}")
++
++
++@router.get("/consultants", response_model=list[ConsultantOut])
++def get_consultants(
++    request: Request,
++):
++    """Get list of all consultants."""
++    try:
++        import requests
++        from ..config import settings
++        
++        # Query auth service for consultants (no auth required for this endpoint)
++        auth_url = f"{settings.auth_base_url}/api/auth/consultants"
++        resp = requests.get(auth_url, timeout=5)
++        if resp.status_code == 200:
++            data = resp.json()
++            if isinstance(data, list):
++                return data
++            return []
++        return []
++    except Exception as e:
++        # Log error but return empty list to prevent breaking the UI
++        import logging
++        logging.error(f"Failed to fetch consultants: {e}")
++        return []
+diff --git a/repository_after/meeting-scheduler/api/app/routes/test_helpers.py b/repository_after/meeting-scheduler/api/app/routes/test_helpers.py
+new file mode 100644
+index 0000000..e3b4050
+--- /dev/null
++++ b/repository_after/meeting-scheduler/api/app/routes/test_helpers.py
+@@ -0,0 +1,19 @@
++from fastapi import APIRouter, Depends, HTTPException
++from sqlalchemy.orm import Session
++
++from ..deps import get_db
++from ..config import settings
++from ..crud import reset_all, seed_slots_next_14_days
++
++router = APIRouter(prefix="/api/test", tags=["test"])
++
++
++@router.post("/reset")
++def reset(
++    db: Session = Depends(get_db),
++):
++    if not settings.api_enable_test_reset:
++        raise HTTPException(status_code=404, detail="Not found")
++    reset_all(db)
++    created = seed_slots_next_14_days(db)
++    return {"ok": True, "seeded": created}
+diff --git a/repository_after/meeting-scheduler/api/app/schemas.py b/repository_after/meeting-scheduler/api/app/schemas.py
+new file mode 100644
+index 0000000..ec0f05a
+--- /dev/null
++++ b/repository_after/meeting-scheduler/api/app/schemas.py
+@@ -0,0 +1,55 @@
++from datetime import datetime
++from uuid import UUID
++from pydantic import BaseModel, Field
++
++
++class UserOut(BaseModel):
++    id: str
++    email: str
++    role: str
++
++
++class SlotOut(BaseModel):
++    id: UUID
++    start_at: datetime
++    end_at: datetime
++
++
++class CreateMeetingIn(BaseModel):
++    slot_id: UUID
++    description: str = Field(min_length=1, max_length=2000)
++
++
++class MeetingOut(BaseModel):
++    id: UUID
++    slot_id: UUID
++    start_at: datetime
++    end_at: datetime
++    user_email: str
++    description: str
++    status: str
++    google_meet_link: str | None = None
++    meet_status: str | None = None  # "OK" | "NOT_CONFIGURED" | "ERROR"
++
++
++class AdminMeetingOut(BaseModel):
++    id: UUID
++    start_at: datetime
++    end_at: datetime
++    user_email: str
++    description: str
++    status: str
++    google_meet_link: str | None
++
++
++class CreateSlotsIn(BaseModel):
++    start_date: str  # ISO date string (YYYY-MM-DD)
++    end_date: str  # ISO date string (YYYY-MM-DD)
++    start_time: str = "09:00"  # HH:MM format
++    end_time: str = "17:00"  # HH:MM format
++    skip_weekends: bool = True
++
++
++class ConsultantOut(BaseModel):
++    id: str
++    email: str
+diff --git a/repository_after/meeting-scheduler/api/requirements.txt b/repository_after/meeting-scheduler/api/requirements.txt
+new file mode 100644
+index 0000000..fee1696
+--- /dev/null
++++ b/repository_after/meeting-scheduler/api/requirements.txt
+@@ -0,0 +1,15 @@
++fastapi==0.115.6
++uvicorn[standard]==0.30.6
++sqlalchemy==2.0.36
++psycopg2-binary==2.9.10
++pydantic==2.9.2
++pydantic-settings==2.6.1
++requests==2.32.3
++python-dateutil==2.9.0.post0
++pytest==8.3.4
++pytest-asyncio==0.24.0
++httpx==0.27.2
++
++# Optional Google Calendar
++google-api-python-client==2.149.0
++google-auth==2.35.0
+diff --git a/repository_after/meeting-scheduler/auth/Dockerfile b/repository_after/meeting-scheduler/auth/Dockerfile
+new file mode 100644
+index 0000000..fb21439
+--- /dev/null
++++ b/repository_after/meeting-scheduler/auth/Dockerfile
+@@ -0,0 +1,12 @@
++FROM node:20-alpine
++
++WORKDIR /app
++COPY package.json tsconfig.json ./
++RUN npm install
++
++COPY src ./src
++RUN npm run build
++
++ENV NODE_ENV=production
++EXPOSE 3001
++CMD ["node", "--enable-source-maps", "dist/index.js"]
+diff --git a/repository_after/meeting-scheduler/auth/package.json b/repository_after/meeting-scheduler/auth/package.json
+new file mode 100644
+index 0000000..f21724b
+--- /dev/null
++++ b/repository_after/meeting-scheduler/auth/package.json
+@@ -0,0 +1,32 @@
++{
++  "name": "meeting-scheduler-auth",
++  "version": "1.0.0",
++  "private": true,
++  "type": "module",
++  "scripts": {
++    "dev": "tsx watch src/index.ts",
++    "start": "node --enable-source-maps dist/index.js",
++    "build": "tsc -p tsconfig.json",
++    "lint": "echo \"(no lint)\""
++  },
++  "dependencies": {
++    "bcryptjs": "^2.4.3",
++    "cookie-parser": "^1.4.6",
++    "cors": "^2.8.5",
++    "express": "^4.19.2",
++    "jsonwebtoken": "^9.0.2",
++    "pg": "^8.12.0",
++    "zod": "^3.23.8"
++  },
++  "devDependencies": {
++    "@types/bcryptjs": "^2.4.6",
++    "@types/cookie-parser": "^1.4.7",
++    "@types/cors": "^2.8.17",
++    "@types/express": "^4.17.21",
++    "@types/jsonwebtoken": "^9.0.6",
++    "@types/node": "^20.11.30",
++    "@types/pg": "^8.10.2",
++    "tsx": "^4.19.0",
++    "typescript": "^5.6.3"
++  }
++}
+diff --git a/repository_after/meeting-scheduler/auth/src/auth.ts b/repository_after/meeting-scheduler/auth/src/auth.ts
+new file mode 100644
+index 0000000..cff902b
+--- /dev/null
++++ b/repository_after/meeting-scheduler/auth/src/auth.ts
+@@ -0,0 +1,159 @@
++import bcrypt from "bcryptjs";
++import jwt from "jsonwebtoken";
++import { z } from "zod";
++import type { Request, Response, NextFunction } from "express";
++import { env, isDevMode } from "./env.js";
++import { pool } from "./db.js";
++import type { Role, SessionUser } from "./types.js";
++
++const RegisterSchema = z.object({
++  email: z.string().email(),
++  password: z.string().min(6),
++  role: z.enum(["user", "consultant"]).default("user"),
++});
++
++const LoginSchema = z.object({
++  email: z.string().email(),
++  password: z.string().min(1),
++});
++
++function signSession(user: SessionUser): string {
++  return jwt.sign(user, env.AUTH_JWT_SECRET, { expiresIn: "7d" });
++}
++
++function setSessionCookie(res: Response, token: string) {
++  // localhost + ports are same-site; allow cross-port requests with credentials
++  res.cookie(env.AUTH_COOKIE_NAME, token, {
++    httpOnly: true,
++    secure: false, // local dev
++    sameSite: "lax",
++    path: "/",
++    maxAge: 7 * 24 * 60 * 60 * 1000,
++  });
++}
++
++function clearSessionCookie(res: Response) {
++  res.clearCookie(env.AUTH_COOKIE_NAME, { path: "/" });
++}
++
++export async function register(req: Request, res: Response) {
++  const parsed = RegisterSchema.safeParse(req.body);
++  if (!parsed.success) return res.status(400).json({ error: "invalid_body" });
++
++  const { email, password, role } = parsed.data;
++  const password_hash = await bcrypt.hash(password, 10);
++
++  try {
++    const result = await pool.query(
++      `INSERT INTO auth_users (email, password_hash, role)
++       VALUES ($1,$2,$3)
++       RETURNING id, email, role`,
++      [email.toLowerCase(), password_hash, role]
++    );
++
++    const user = {
++      id: result.rows[0].id,
++      email: result.rows[0].email,
++      role: result.rows[0].role as Role,
++    } satisfies SessionUser;
++
++    // Register does not log in by default; keep explicit.
++    return res.status(201).json({ ok: true, user });
++  } catch (e: any) {
++    if (String(e?.code) === "23505") return res.status(409).json({ error: "email_taken" });
++    return res.status(500).json({ error: "server_error" });
++  }
++}
++
++export async function login(req: Request, res: Response) {
++  const parsed = LoginSchema.safeParse(req.body);
++  if (!parsed.success) return res.status(400).json({ error: "invalid_body" });
++
++  const { email, password } = parsed.data;
++  const result = await pool.query(
++    `SELECT id, email, password_hash, role
++     FROM auth_users
++     WHERE email = $1`,
++    [email.toLowerCase()]
++  );
++  if (result.rowCount === 0) return res.status(401).json({ error: "invalid_credentials" });
++
++  const row = result.rows[0];
++  const ok = await bcrypt.compare(password, row.password_hash);
++  if (!ok) return res.status(401).json({ error: "invalid_credentials" });
++
++  const user = {
++    id: row.id,
++    email: row.email,
++    role: row.role as Role,
++  } satisfies SessionUser;
++
++  const token = signSession(user);
++  setSessionCookie(res, token);
++  return res.json({ ok: true, user });
++}
++
++export async function logout(_req: Request, res: Response) {
++  clearSessionCookie(res);
++  return res.json({ ok: true });
++}
++
++export function requireSession(req: Request, res: Response, next: NextFunction) {
++  const token = req.cookies?.[env.AUTH_COOKIE_NAME] || (req.header("authorization")?.startsWith("Bearer ") ? req.header("authorization")!.slice(7) : null);
++  if (!token) return res.status(401).json({ error: "unauthorized" });
++  try {
++    const decoded = jwt.verify(token, env.AUTH_JWT_SECRET) as SessionUser;
++    (req as any).sessionUser = decoded;
++    return next();
++  } catch {
++    return res.status(401).json({ error: "unauthorized" });
++  }
++}
++
++export function session(req: Request, res: Response) {
++  const user = (req as any).sessionUser as SessionUser | undefined;
++  if (!user) return res.status(401).json({ error: "unauthorized" });
++  return res.json({ user });
++}
++
++export async function seedConsultant(_req: Request, res: Response) {
++  // DEV ONLY: create consultant@example.com if none exists
++  if (!isDevMode) return res.status(404).json({ error: "not_found" });
++
++  const email = "consultant@example.com";
++  const password = "consultant123!";
++  const password_hash = await bcrypt.hash(password, 10);
++  const existing = await pool.query(`SELECT id FROM auth_users WHERE email=$1`, [email]);
++  if ((existing.rows?.length ?? 0) > 0) {
++    return res.json({ ok: true, email, password, existed: true });
++  }
++  const inserted = await pool.query(
++    `INSERT INTO auth_users (email, password_hash, role)
++     VALUES ($1,$2,'consultant')
++     RETURNING id`,
++    [email, password_hash]
++  );
++  return res.json({ ok: true, email, password, existed: false, id: inserted.rows[0].id });
++}
++
++export async function testSetRole(req: Request, res: Response) {
++  if (!isDevMode) return res.status(404).json({ error: "not_found" });
++  const schema = z.object({ email: z.string().email(), role: z.enum(["user","consultant"]) });
++  const parsed = schema.safeParse(req.body);
++  if (!parsed.success) return res.status(400).json({ error: "invalid_body" });
++
++  const { email, role } = parsed.data;
++  await pool.query(`UPDATE auth_users SET role=$2 WHERE email=$1`, [email.toLowerCase(), role]);
++  return res.json({ ok: true });
++}
++
++export async function listConsultants(_req: Request, res: Response) {
++  try {
++    const result = await pool.query(
++      `SELECT id, email FROM auth_users WHERE role = 'consultant' ORDER BY email`
++    );
++    return res.json(result.rows.map(row => ({ id: row.id, email: row.email })));
++  } catch (e: any) {
++    return res.status(500).json({ error: "server_error" });
++  }
++}
+diff --git a/repository_after/meeting-scheduler/auth/src/db.ts b/repository_after/meeting-scheduler/auth/src/db.ts
+new file mode 100644
+index 0000000..66c873e
+--- /dev/null
++++ b/repository_after/meeting-scheduler/auth/src/db.ts
+@@ -0,0 +1,22 @@
++import pg from "pg";
++import { env } from "./env.js";
++
++export const pool = new pg.Pool({
++  connectionString: env.DATABASE_URL.replace("postgresql+psycopg2://", "postgresql://"),
++});
++
++export async function initAuthSchema(): Promise<void> {
++  await pool.query(`
++    CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
++  `);
++  await pool.query(`
++    CREATE TABLE IF NOT EXISTS auth_users (
++      id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
++      email text NOT NULL UNIQUE,
++      password_hash text NOT NULL,
++      email_verified boolean NOT NULL DEFAULT false,
++      role text NOT NULL DEFAULT 'user',
++      created_at timestamptz NOT NULL DEFAULT now()
++    );
++  `);
++}
+diff --git a/repository_after/meeting-scheduler/auth/src/env.ts b/repository_after/meeting-scheduler/auth/src/env.ts
+new file mode 100644
+index 0000000..2cbdba8
+--- /dev/null
++++ b/repository_after/meeting-scheduler/auth/src/env.ts
+@@ -0,0 +1,21 @@
++import { z } from "zod";
++
++const EnvSchema = z.object({
++  AUTH_PORT: z.string().default("3001"),
++  DATABASE_URL: z.string(),
++  AUTH_JWT_SECRET: z.string().default("dev-secret-change-me"),
++  AUTH_COOKIE_NAME: z.string().default("ms_session"),
++  AUTH_DEV_MODE: z.string().default("1"),
++  AUTH_CORS_ORIGIN: z.string().default("http://localhost:5173"),
++});
++
++export const env = EnvSchema.parse({
++  AUTH_PORT: process.env.AUTH_PORT,
++  DATABASE_URL: process.env.DATABASE_URL,
++  AUTH_JWT_SECRET: process.env.AUTH_JWT_SECRET,
++  AUTH_COOKIE_NAME: process.env.AUTH_COOKIE_NAME,
++  AUTH_DEV_MODE: process.env.AUTH_DEV_MODE,
++  AUTH_CORS_ORIGIN: process.env.AUTH_CORS_ORIGIN,
++});
++
++export const isDevMode = env.AUTH_DEV_MODE === "1";
+diff --git a/repository_after/meeting-scheduler/auth/src/index.ts b/repository_after/meeting-scheduler/auth/src/index.ts
+new file mode 100644
+index 0000000..90f74fc
+--- /dev/null
++++ b/repository_after/meeting-scheduler/auth/src/index.ts
+@@ -0,0 +1,54 @@
++import express from "express";
++import cookieParser from "cookie-parser";
++import cors from "cors";
++import { env } from "./env.js";
++import { initAuthSchema } from "./db.js";
++import {
++  register,
++  login,
++  logout,
++  requireSession,
++  session,
++  seedConsultant,
++  testSetRole,
++  listConsultants,
++} from "./auth.js";
++
++async function main() {
++  await initAuthSchema();
++
++  const app = express();
++  app.use(express.json());
++  app.use(cookieParser());
++
++  app.use(
++    cors({
++      origin: env.AUTH_CORS_ORIGIN,
++      credentials: true,
++    })
++  );
++
++  // Routes under /api/auth/*
++  app.post("/api/auth/register", register);
++  app.post("/api/auth/login", login);
++  app.post("/api/auth/logout", logout);
++
++  app.get("/api/auth/session", requireSession, session);
++  app.get("/api/auth/consultants", listConsultants);
++
++  // DEV ONLY
++  app.post("/api/auth/seed-consultant", seedConsultant);
++  app.post("/api/auth/test/set-role", testSetRole);
++
++  app.get("/health", (_req, res) => res.json({ ok: true }));
++
++  const port = Number(env.AUTH_PORT);
++  app.listen(port, () => {
++    console.log(`auth listening on :${port}`);
++  });
++}
++
++main().catch((e) => {
++  console.error(e);
++  process.exit(1);
++});
+diff --git a/repository_after/meeting-scheduler/auth/src/types.ts b/repository_after/meeting-scheduler/auth/src/types.ts
+new file mode 100644
+index 0000000..d96e4c0
+--- /dev/null
++++ b/repository_after/meeting-scheduler/auth/src/types.ts
+@@ -0,0 +1,11 @@
++export type Role = "user" | "consultant";
++
++export type SessionUser = {
++  id: string;
++  email: string;
++  role: Role;
++};
++
++export type SessionResponse = {
++  user: SessionUser;
++};
+diff --git a/repository_after/meeting-scheduler/auth/tsconfig.json b/repository_after/meeting-scheduler/auth/tsconfig.json
+new file mode 100644
+index 0000000..3305a94
+--- /dev/null
++++ b/repository_after/meeting-scheduler/auth/tsconfig.json
+@@ -0,0 +1,16 @@
++{
++  "compilerOptions": {
++    "target": "ES2022",
++    "module": "ES2022",
++    "moduleResolution": "Bundler",
++    "outDir": "dist",
++    "rootDir": "src",
++    "strict": true,
++    "esModuleInterop": true,
++    "forceConsistentCasingInFileNames": true,
++    "skipLibCheck": true
++  },
++  "include": [
++    "src/**/*.ts"
++  ]
++}
+\ No newline at end of file
+diff --git a/repository_after/meeting-scheduler/docker-compose.yml b/repository_after/meeting-scheduler/docker-compose.yml
+new file mode 100644
+index 0000000..12b9183
+--- /dev/null
++++ b/repository_after/meeting-scheduler/docker-compose.yml
+@@ -0,0 +1,97 @@
++services:
++  postgres:
++    image: postgres:16-alpine
++    environment:
++      POSTGRES_USER: ${POSTGRES_USER:-postgres}
++      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
++      POSTGRES_DB: ${POSTGRES_DB:-meeting_scheduler}
++    ports:
++      - "${POSTGRES_PORT:-5432}:5432"
++    volumes:
++      - pg_data:/var/lib/postgresql/data
++    healthcheck:
++      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
++      interval: 2s
++      timeout: 3s
++      retries: 30
++
++  auth:
++    build: ./auth
++    environment:
++      AUTH_PORT: ${AUTH_PORT:-3001}
++      DATABASE_URL: ${DATABASE_URL:-postgresql://postgres:postgres@postgres:5432/meeting_scheduler}
++      AUTH_JWT_SECRET: ${AUTH_JWT_SECRET:-dev-secret-change-me}
++      AUTH_COOKIE_NAME: ${AUTH_COOKIE_NAME:-ms_session}
++      AUTH_DEV_MODE: ${AUTH_DEV_MODE:-1}
++      AUTH_CORS_ORIGIN: ${AUTH_CORS_ORIGIN:-http://localhost:5173}
++    depends_on:
++      postgres:
++        condition: service_healthy
++    ports:
++      - "3001:3001"
++
++  api:
++    build: ./api
++    environment:
++      API_PORT: ${API_PORT:-8000}
++      API_CORS_ORIGIN: ${API_CORS_ORIGIN:-http://localhost:5173}
++      DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg2://postgres:postgres@postgres:5432/meeting_scheduler}
++      AUTH_BASE_URL: ${AUTH_BASE_URL:-http://auth:3001}
++      GOOGLE_SERVICE_ACCOUNT_JSON: ${GOOGLE_SERVICE_ACCOUNT_JSON}
++      GOOGLE_SERVICE_ACCOUNT_FILE: ${GOOGLE_SERVICE_ACCOUNT_FILE}
++      GOOGLE_CALENDAR_ID: ${GOOGLE_CALENDAR_ID:-primary}
++      API_ENABLE_TEST_RESET: ${API_ENABLE_TEST_RESET:-1}
++    depends_on:
++      postgres:
++        condition: service_healthy
++      auth:
++        condition: service_started
++    ports:
++      - "8000:8000"
++
++  web:
++    build: ./web
++    environment:
++      VITE_AUTH_BASE_URL: http://localhost:3001
++      VITE_API_BASE_URL: http://localhost:8000
++    depends_on:
++      - api
++      - auth
++    ports:
++      - "5173:5173"
++
++  # Backend Python tests (pytest)
++  # Usage: docker compose run --rm test-backend
++  test-backend:
++    build:
++      context: ../../
++      dockerfile: repository_after/meeting-scheduler/Dockerfile.test-backend
++    environment:
++      API_BASE_URL: http://api:8000
++      AUTH_BASE_URL: http://auth:3001
++      TEST_DATABASE_URL: "sqlite:///:memory:"
++    depends_on:
++      postgres:
++        condition: service_healthy
++      auth:
++        condition: service_started
++      api:
++        condition: service_started
++    networks:
++      - default
++    command: pytest tests/ -v
++    profiles:
++      - testing
++
++  # Frontend TypeScript/React tests (vitest)
++  # Usage: docker compose run --rm test-frontend
++  test-frontend:
++    build:
++      context: ../../
++      dockerfile: repository_after/meeting-scheduler/Dockerfile.test-frontend
++    command: npm test
++    profiles:
++      - testing
++
++volumes:
++  pg_data:
+diff --git a/repository_after/meeting-scheduler/web/Dockerfile b/repository_after/meeting-scheduler/web/Dockerfile
+new file mode 100644
+index 0000000..b25cb08
+--- /dev/null
++++ b/repository_after/meeting-scheduler/web/Dockerfile
+@@ -0,0 +1,9 @@
++FROM node:20-alpine
++
++WORKDIR /app
++COPY package.json tsconfig.json vite.config.ts index.html ./
++COPY src ./src
++
++RUN npm install
++EXPOSE 5173
++CMD ["npm", "run", "dev"]
+diff --git a/repository_after/meeting-scheduler/web/index.html b/repository_after/meeting-scheduler/web/index.html
+new file mode 100644
+index 0000000..fd29b81
+--- /dev/null
++++ b/repository_after/meeting-scheduler/web/index.html
+@@ -0,0 +1,12 @@
++<!doctype html>
++<html lang="en">
++  <head>
++    <meta charset="UTF-8" />
++    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
++    <title>Meeting Scheduler</title>
++  </head>
++  <body>
++    <div id="root"></div>
++    <script type="module" src="/src/main.tsx"></script>
++  </body>
++</html>
+diff --git a/repository_after/meeting-scheduler/web/package.json b/repository_after/meeting-scheduler/web/package.json
+new file mode 100644
+index 0000000..094da4a
+--- /dev/null
++++ b/repository_after/meeting-scheduler/web/package.json
+@@ -0,0 +1,23 @@
++{
++  "name": "meeting-scheduler-web",
++  "version": "1.0.0",
++  "private": true,
++  "type": "module",
++  "scripts": {
++    "dev": "vite --host 0.0.0.0 --port 5173",
++    "build": "tsc -b && vite build",
++    "preview": "vite preview --host 0.0.0.0 --port 5173"
++  },
++  "dependencies": {
++    "react": "^18.3.1",
++    "react-dom": "^18.3.1",
++    "react-router-dom": "^6.28.0"
++  },
++  "devDependencies": {
++    "@types/react": "^18.3.12",
++    "@types/react-dom": "^18.3.1",
++    "@vitejs/plugin-react": "^4.3.4",
++    "typescript": "^5.6.3",
++    "vite": "^5.4.11"
++  }
++}
+\ No newline at end of file
+diff --git a/repository_after/meeting-scheduler/web/src/App.tsx b/repository_after/meeting-scheduler/web/src/App.tsx
+new file mode 100644
+index 0000000..11a0b0f
+--- /dev/null
++++ b/repository_after/meeting-scheduler/web/src/App.tsx
+@@ -0,0 +1,100 @@
++import React, { useEffect, useState } from "react";
++import { NavLink, Route, Routes, useLocation } from "react-router-dom";
++import Register from "./pages/Register";
++import Login from "./pages/Login";
++import Slots from "./pages/Slots";
++import MyMeetings from "./pages/MyMeetings";
++import Consultant from "./pages/Consultant";
++import { getSession, logout, type SessionUser } from "./lib/auth";
++import { ProtectedRoute, VerifiedRoute, ConsultantRoute } from "./components/ProtectedRoute";
++
++export default function App() {
++  const [user, setUser] = useState<SessionUser | null>(null);
++  const [loading, setLoading] = useState(true);
++  const location = useLocation();
++
++  async function refreshSession() {
++    setLoading(true);
++    const sess = await getSession();
++    setUser(sess?.user ?? null);
++    setLoading(false);
++  }
++
++  useEffect(() => {
++    refreshSession();
++  }, [location.pathname]);
++
++  return (
++    <div>
++      <div className="container">
++        <div className="header">
++          <div className="nav">
++            <NavLink to="/slots">Slots</NavLink>
++            {user?.role === "user" && <NavLink to="/my-meetings">My Meetings</NavLink>}
++            {user?.role === "consultant" && <NavLink to="/consultant">My Consultations</NavLink>}
++          </div>
++
++          <div className="row" style={{ alignItems: "center" }}>
++            {loading ? (
++              <span className="small">Loading session…</span>
++            ) : user ? (
++              <>
++                <span className="small" data-testid="session-email">
++                  {user.email} <span className="badge">{user.role}</span>
++                </span>
++                <button
++                  className="btn secondary"
++                  data-testid="logout"
++                  onClick={async () => {
++                    await logout();
++                    await refreshSession();
++                  }}
++                >
++                  Logout
++                </button>
++              </>
++            ) : (
++              <>
++                <NavLink to="/login" data-testid="nav-login">Login</NavLink>
++                <NavLink to="/register" data-testid="nav-register">Register</NavLink>
++              </>
++            )}
++          </div>
++        </div>
++
++        <Routes>
++          <Route path="/" element={<Login />} />
++          <Route path="/register" element={<Register />} />
++          <Route path="/login" element={<Login />} />
++
++          <Route
++            path="/slots"
++            element={
++              <ProtectedRoute user={user}>
++                <Slots user={user as any} />
++              </ProtectedRoute>
++            }
++          />
++
++          <Route
++            path="/my-meetings"
++            element={
++              <ProtectedRoute user={user}>
++                <MyMeetings />
++              </ProtectedRoute>
++            }
++          />
++
++          <Route
++            path="/consultant"
++            element={
++              <ConsultantRoute user={user}>
++                <Consultant />
++              </ConsultantRoute>
++            }
++          />
++        </Routes>
++      </div>
++    </div>
++  );
++}
+diff --git a/repository_after/meeting-scheduler/web/src/api/client.ts b/repository_after/meeting-scheduler/web/src/api/client.ts
+new file mode 100644
+index 0000000..166874e
+--- /dev/null
++++ b/repository_after/meeting-scheduler/web/src/api/client.ts
+@@ -0,0 +1,41 @@
++const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
++
++export async function apiFetch(path: string, init: RequestInit = {}) {
++  try {
++    const res = await fetch(`${API_BASE_URL}${path}`, {
++      ...init,
++      credentials: "include",
++      headers: {
++        "Content-Type": "application/json",
++        ...(init.headers || {}),
++      },
++    });
++
++    const text = await res.text();
++    let data: any = null;
++    try {
++      data = text ? JSON.parse(text) : null;
++    } catch {
++      data = text;
++    }
++
++    if (!res.ok) {
++      const message = data?.detail || data?.error || res.statusText;
++      const err = new Error(message);
++      (err as any).status = res.status;
++      (err as any).data = data;
++      throw err;
++    }
++    return data;
++  } catch (error: any) {
++    // Handle network errors (CORS, connection refused, etc.)
++    if (error.name === "TypeError" || error.message === "Failed to fetch") {
++      const networkErr = new Error("Unable to connect to server. Please check if the API is running.");
++      (networkErr as any).status = 0;
++      (networkErr as any).isNetworkError = true;
++      throw networkErr;
++    }
++    // Re-throw other errors
++    throw error;
++  }
++}
+diff --git a/repository_after/meeting-scheduler/web/src/components/BookingModal.tsx b/repository_after/meeting-scheduler/web/src/components/BookingModal.tsx
+new file mode 100644
+index 0000000..ddf3995
+--- /dev/null
++++ b/repository_after/meeting-scheduler/web/src/components/BookingModal.tsx
+@@ -0,0 +1,105 @@
++/// <reference path="../react-shim.d.ts" />
++import React, { useState, useEffect } from "react";
++
++export function BookingModal({
++  open,
++  onClose,
++  onConfirm,
++  slotLabel,
++}: {
++  open: boolean;
++  onClose: () => void;
++  onConfirm: (description: string) => Promise<void>;
++  slotLabel: string;
++}) {
++  const [desc, setDesc] = useState("");
++  const [busy, setBusy] = useState(false);
++  const [err, setErr] = useState<string | null>(null);
++
++  // Reset form when modal opens
++  useEffect(() => {
++    if (open) {
++      setDesc("");
++      setErr(null);
++      setBusy(false);
++    }
++  }, [open]);
++
++  if (!open) return null;
++
++  const handleBackdropClick = (e: any) => {
++    if (e.target === e.currentTarget && !busy) {
++      onClose();
++    }
++  };
++
++  const handleModalClick = (e: any) => {
++    e.stopPropagation();
++  };
++
++  const handleSubmit = async () => {
++    if (desc.trim().length === 0 || busy) return;
++    
++    setBusy(true);
++    setErr(null);
++    try {
++      await onConfirm(desc.trim());
++      // On success, close the modal (parent component will handle this)
++      onClose();
++    } catch (e: any) {
++      setErr(e?.message || "Failed to book slot");
++      setBusy(false);
++    }
++  };
++
++  return (
++    <div 
++      className="modalBackdrop" 
++      data-testid="book-modal-backdrop"
++      onClick={handleBackdropClick}
++    >
++      <div className="card modal" data-testid="book-modal" onClick={handleModalClick}>
++        <div className="header">
++          <div>
++            <div style={{ fontWeight: 700 }}>Book Slot</div>
++            <div className="small" data-testid="book-slot-label">{slotLabel}</div>
++          </div>
++          <button 
++            className="btn secondary" 
++            onClick={onClose} 
++            disabled={busy} 
++            data-testid="book-modal-close"
++          >
++            Close
++          </button>
++        </div>
++
++        <label>Description</label>
++        <textarea
++          data-testid="book-description"
++          rows={4}
++          placeholder="What do you want to discuss?"
++          value={desc}
++          onChange={(e: any) => setDesc(e.target.value)}
++          disabled={busy}
++        />
++        {err && (
++          <div className="small" style={{ color: "#ffb4b4", marginTop: 8 }} data-testid="book-error">
++            {err}
++          </div>
++        )}
++
++        <div className="row" style={{ justifyContent: "flex-end", marginTop: 10 }}>
++          <button
++            className="btn"
++            disabled={busy || desc.trim().length === 0}
++            data-testid="book-confirm"
++            onClick={handleSubmit}
++          >
++            {busy ? "Booking..." : "Confirm Booking"}
++          </button>
++        </div>
++      </div>
++    </div>
++  );
++}
+diff --git a/repository_after/meeting-scheduler/web/src/components/ProtectedRoute.tsx b/repository_after/meeting-scheduler/web/src/components/ProtectedRoute.tsx
+new file mode 100644
+index 0000000..b74b140
+--- /dev/null
++++ b/repository_after/meeting-scheduler/web/src/components/ProtectedRoute.tsx
+@@ -0,0 +1,37 @@
++import React from "react";
++import { Navigate } from "react-router-dom";
++import type { SessionUser } from "../lib/auth";
++
++export function ProtectedRoute({
++  user,
++  children,
++}: {
++  user: SessionUser | null;
++  children: React.ReactNode;
++}) {
++  if (!user) return <Navigate to="/login" replace />;
++  return <>{children}</>;
++}
++
++export function VerifiedRoute({
++  user,
++  children,
++}: {
++  user: SessionUser | null;
++  children: React.ReactNode;
++}) {
++  if (!user) return <Navigate to="/login" replace />;
++  return <>{children}</>;
++}
++
++export function ConsultantRoute({
++  user,
++  children,
++}: {
++  user: SessionUser | null;
++  children: React.ReactNode;
++}) {
++  if (!user) return <Navigate to="/login" replace />;
++  if (user.role !== "consultant") return <div className="card">Consultant only.</div>;
++  return <>{children}</>;
++}
+diff --git a/repository_after/meeting-scheduler/web/src/components/SlotList.tsx b/repository_after/meeting-scheduler/web/src/components/SlotList.tsx
+new file mode 100644
+index 0000000..d5d9fae
+--- /dev/null
++++ b/repository_after/meeting-scheduler/web/src/components/SlotList.tsx
+@@ -0,0 +1,40 @@
++import React from "react";
++
++export type Slot = {
++  id: string;
++  start_at: string;
++  end_at: string;
++};
++
++export function SlotList({
++  slots,
++  onBook,
++}: {
++  slots: Slot[];
++  onBook: (slot: Slot) => void;
++}) {
++  if (slots.length === 0) {
++    return <div className="card" data-testid="no-slots">No available slots in this range.</div>;
++  }
++
++  return (
++    <div className="row" data-testid="slot-list">
++      {slots.map((s) => {
++        const start = new Date(s.start_at);
++        const end = new Date(s.end_at);
++        const label = `${start.toLocaleString()} – ${end.toLocaleTimeString()}`;
++
++        return (
++          <div key={s.id} className="card" style={{ flex: "1 1 280px" }} data-testid={`slot-card-${s.id}`}>
++            <div style={{ fontWeight: 700 }} data-testid="slot-time">{label}</div>
++            <div className="small">30 minutes</div>
++            <div style={{ height: 10 }} />
++            <button className="btn" onClick={() => onBook(s)} data-testid={`slot-book-${s.id}`}>
++              Book
++            </button>
++          </div>
++        );
++      })}
++    </div>
++  );
++}
+diff --git a/repository_after/meeting-scheduler/web/src/lib/auth.ts b/repository_after/meeting-scheduler/web/src/lib/auth.ts
+new file mode 100644
+index 0000000..07e9130
+--- /dev/null
++++ b/repository_after/meeting-scheduler/web/src/lib/auth.ts
+@@ -0,0 +1,62 @@
++const AUTH_BASE_URL = import.meta.env.VITE_AUTH_BASE_URL || "http://localhost:3001";
++
++export type SessionUser = {
++  id: string;
++  email: string;
++  role: "user" | "consultant";
++};
++
++export async function authFetch(path: string, init: RequestInit = {}) {
++  const res = await fetch(`${AUTH_BASE_URL}${path}`, {
++    ...init,
++    credentials: "include",
++    headers: {
++      "Content-Type": "application/json",
++      ...(init.headers || {}),
++    },
++  });
++  const text = await res.text();
++  let data: any = null;
++  try {
++    data = text ? JSON.parse(text) : null;
++  } catch {
++    data = text;
++  }
++  if (!res.ok) {
++    const err = new Error(data?.error || res.statusText);
++    (err as any).status = res.status;
++    (err as any).data = data;
++    throw err;
++  }
++  return data;
++}
++
++export async function register(email: string, password: string, role: "user" | "consultant" = "user") {
++  return authFetch("/api/auth/register", { method: "POST", body: JSON.stringify({ email, password, role }) });
++}
++
++export async function login(email: string, password: string) {
++  return authFetch("/api/auth/login", { method: "POST", body: JSON.stringify({ email, password }) });
++}
++
++export async function logout() {
++  return authFetch("/api/auth/logout", { method: "POST" });
++}
++
++export async function getSession(): Promise<{ user: SessionUser } | null> {
++  try {
++    return await authFetch("/api/auth/session", { method: "GET" });
++  } catch (e: any) {
++    if (e?.status === 401) return null;
++    throw e;
++  }
++}
++
++// DEV helpers (used by e2e)
++export async function devSetRole(email: string, role: "user" | "consultant") {
++  return authFetch("/api/auth/test/set-role", { method: "POST", body: JSON.stringify({ email, role }) });
++}
++
++export async function seedConsultant() {
++  return authFetch("/api/auth/seed-consultant", { method: "POST" });
++}
+diff --git a/repository_after/meeting-scheduler/web/src/main.tsx b/repository_after/meeting-scheduler/web/src/main.tsx
+new file mode 100644
+index 0000000..5e74ac7
+--- /dev/null
++++ b/repository_after/meeting-scheduler/web/src/main.tsx
+@@ -0,0 +1,13 @@
++import React from "react";
++import ReactDOM from "react-dom/client";
++import { BrowserRouter } from "react-router-dom";
++import App from "./App";
++import "./styles.css";
++
++ReactDOM.createRoot(document.getElementById("root")!).render(
++  <React.StrictMode>
++    <BrowserRouter>
++      <App />
++    </BrowserRouter>
++  </React.StrictMode>
++);
+diff --git a/repository_after/meeting-scheduler/web/src/pages/Admin.tsx b/repository_after/meeting-scheduler/web/src/pages/Admin.tsx
+new file mode 100644
+index 0000000..c3daf90
+--- /dev/null
++++ b/repository_after/meeting-scheduler/web/src/pages/Admin.tsx
+@@ -0,0 +1,98 @@
++import React, { useEffect, useState } from "react";
++import { apiFetch } from "../api/client";
++
++export default function Consultant() {
++  const [items, setItems] = useState<any[]>([]);
++  const [busy, setBusy] = useState(false);
++  const [err, setErr] = useState<string | null>(null);
++
++  async function load() {
++    setBusy(true);
++    setErr(null);
++    try {
++      const data = await apiFetch("/api/admin/meetings");
++      setItems(data);
++    } catch (e: any) {
++      setErr(e?.message || "Failed");
++    } finally {
++      setBusy(false);
++    }
++  }
++
++  useEffect(() => {
++    load();
++  }, []);
++
++  return (
++    <div className="container">
++      <div className="header">
++        <div>
++          <h2 style={{ margin: 0 }}>My Consultations</h2>
++          <div className="small">View your booked consultations.</div>
++        </div>
++        <div className="row">
++          <button className="btn secondary" onClick={load} disabled={busy} data-testid="consultant-refresh">
++            {busy ? "Loading..." : "Refresh"}
++          </button>
++          <button
++            className="btn secondary"
++            data-testid="consultant-seed-slots"
++            onClick={async () => {
++              try {
++                await apiFetch("/api/slots/seed", { method: "POST" });
++                await load();
++              } catch (e: any) {
++                setErr(e?.message || "Failed to seed");
++              }
++            }}
++          >
++            Create Slots
++          </button>
++        </div>
++      </div>
++
++      {err && <div className="card" style={{ borderColor: "#b42318" }} data-testid="consultant-error">{err}</div>}
++
++      <div className="card">
++        <table className="table" data-testid="consultant-table">
++          <thead>
++            <tr>
++              <th>Time</th>
++              <th>Client</th>
++              <th>Description</th>
++              <th>Meet</th>
++            </tr>
++          </thead>
++          <tbody>
++            {items.map((m) => {
++              const start = new Date(m.start_at);
++              const end = new Date(m.end_at);
++              const label = `${start.toLocaleString()} – ${end.toLocaleTimeString()}`;
++              return (
++                <tr key={m.id} data-testid={`consultant-row-${m.id}`}>
++                  <td>{label}</td>
++                  <td>{m.user_email}</td>
++                  <td>{m.description}</td>
++                  <td>
++                    {m.google_meet_link ? (
++                      <a href={m.google_meet_link} target="_blank" rel="noreferrer" data-testid={`consultant-link-${m.id}`}>
++                        Join
++                      </a>
++                    ) : (
++                      <span className="small">Pending</span>
++                    )}
++                  </td>
++                </tr>
++              );
++            })}
++            {items.length === 0 && (
++              <tr>
++                <td colSpan={4} className="small">No consultations booked yet.</td>
++              </tr>
++            )}
++          </tbody>
++        </table>
++      </div>
++    </div>
++  );
++}
+diff --git a/repository_after/meeting-scheduler/web/src/pages/Consultant.tsx b/repository_after/meeting-scheduler/web/src/pages/Consultant.tsx
+new file mode 100644
+index 0000000..610d072
+--- /dev/null
++++ b/repository_after/meeting-scheduler/web/src/pages/Consultant.tsx
+@@ -0,0 +1,223 @@
++import React, { useEffect, useState } from "react";
++import { apiFetch } from "../api/client";
++
++export default function Consultant() {
++  const [items, setItems] = useState<any[]>([]);
++  const [busy, setBusy] = useState(false);
++  const [err, setErr] = useState<string | null>(null);
++  const [showCreateSlots, setShowCreateSlots] = useState(false);
++  const [createBusy, setCreateBusy] = useState(false);
++  const [createErr, setCreateErr] = useState<string | null>(null);
++  
++  // Create slots form state
++  const [startDate, setStartDate] = useState(() => {
++    const d = new Date();
++    d.setDate(d.getDate() + 1); // Tomorrow
++    return d.toISOString().split("T")[0];
++  });
++  const [endDate, setEndDate] = useState(() => {
++    const d = new Date();
++    d.setDate(d.getDate() + 7); // 7 days from now
++    return d.toISOString().split("T")[0];
++  });
++  const [startTime, setStartTime] = useState("09:00");
++  const [endTime, setEndTime] = useState("17:00");
++  const [skipWeekends, setSkipWeekends] = useState(true);
++
++  async function load() {
++    setBusy(true);
++    setErr(null);
++    try {
++      const data = await apiFetch("/api/admin/meetings");
++      setItems(data);
++    } catch (e: any) {
++      setErr(e?.message || "Failed");
++    } finally {
++      setBusy(false);
++    }
++  }
++
++  useEffect(() => {
++    load();
++  }, []);
++
++  return (
++    <div className="container">
++      <div className="header">
++        <div>
++          <h2 style={{ margin: 0 }}>My Consultations</h2>
++          <div className="small">View your booked consultations.</div>
++        </div>
++        <div className="row">
++          <button className="btn secondary" onClick={load} disabled={busy} data-testid="consultant-refresh">
++            {busy ? "Loading..." : "Refresh"}
++          </button>
++          <button
++            className="btn"
++            data-testid="consultant-create-slots-btn"
++            onClick={() => setShowCreateSlots(true)}
++          >
++            Create Slots
++          </button>
++        </div>
++      </div>
++
++      {err && <div className="card" style={{ borderColor: "#b42318" }} data-testid="consultant-error">{err}</div>}
++
++      {showCreateSlots && (
++        <div className="card" style={{ marginBottom: 16 }}>
++          <div className="header">
++            <div>
++              <h3 style={{ margin: 0 }}>Create Time Slots</h3>
++              <div className="small">Create 30-minute slots for selected dates and hours</div>
++            </div>
++            <button className="btn secondary" onClick={() => setShowCreateSlots(false)}>
++              Close
++            </button>
++          </div>
++          
++          <div style={{ marginTop: 16 }}>
++            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
++              <div>
++                <label>Start Date</label>
++                <input
++                  type="date"
++                  value={startDate}
++                  onChange={(e) => setStartDate(e.target.value)}
++                  data-testid="create-slots-start-date"
++                  style={{ width: "100%", padding: "8px" }}
++                />
++              </div>
++              <div>
++                <label>End Date</label>
++                <input
++                  type="date"
++                  value={endDate}
++                  onChange={(e) => setEndDate(e.target.value)}
++                  data-testid="create-slots-end-date"
++                  style={{ width: "100%", padding: "8px" }}
++                />
++              </div>
++            </div>
++            
++            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
++              <div>
++                <label>Start Time</label>
++                <input
++                  type="time"
++                  value={startTime}
++                  onChange={(e) => setStartTime(e.target.value)}
++                  data-testid="create-slots-start-time"
++                  style={{ width: "100%", padding: "8px" }}
++                />
++              </div>
++              <div>
++                <label>End Time</label>
++                <input
++                  type="time"
++                  value={endTime}
++                  onChange={(e) => setEndTime(e.target.value)}
++                  data-testid="create-slots-end-time"
++                  style={{ width: "100%", padding: "8px" }}
++                />
++              </div>
++            </div>
++            
++            <div style={{ marginBottom: 12 }}>
++              <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
++                <input
++                  type="checkbox"
++                  checked={skipWeekends}
++                  onChange={(e) => setSkipWeekends(e.target.checked)}
++                  data-testid="create-slots-skip-weekends"
++                />
++                Skip weekends (Saturday & Sunday)
++              </label>
++            </div>
++            
++            {createErr && (
++              <div className="small" style={{ color: "#ffb4b4", marginBottom: 12 }} data-testid="create-slots-error">
++                {createErr}
++              </div>
++            )}
++            
++            <div className="row" style={{ justifyContent: "flex-end" }}>
++              <button
++                className="btn"
++                disabled={createBusy}
++                data-testid="create-slots-submit"
++                onClick={async () => {
++                  setCreateBusy(true);
++                  setCreateErr(null);
++                  try {
++                    const result = await apiFetch("/api/slots/create", {
++                      method: "POST",
++                      body: JSON.stringify({
++                        start_date: startDate,
++                        end_date: endDate,
++                        start_time: startTime,
++                        end_time: endTime,
++                        skip_weekends: skipWeekends,
++                      }),
++                    });
++                    setShowCreateSlots(false);
++                    setErr(null);
++                    await load();
++                    alert(`Successfully created ${result.created} slots!`);
++                  } catch (e: any) {
++                    setCreateErr(e?.message || "Failed to create slots");
++                  } finally {
++                    setCreateBusy(false);
++                  }
++                }}
++              >
++                {createBusy ? "Creating..." : "Create Slots"}
++              </button>
++            </div>
++          </div>
++        </div>
++      )}
++
++      <div className="card">
++        <table className="table" data-testid="consultant-table">
++          <thead>
++            <tr>
++              <th>Time</th>
++              <th>Client</th>
++              <th>Description</th>
++              <th>Meet</th>
++            </tr>
++          </thead>
++          <tbody>
++            {items.map((m) => {
++              const start = new Date(m.start_at);
++              const end = new Date(m.end_at);
++              const label = `${start.toLocaleString()} – ${end.toLocaleTimeString()}`;
++              return (
++                <tr key={m.id} data-testid={`consultant-row-${m.id}`}>
++                  <td>{label}</td>
++                  <td>{m.user_email}</td>
++                  <td>{m.description}</td>
++                  <td>
++                    {m.google_meet_link ? (
++                      <a href={m.google_meet_link} target="_blank" rel="noreferrer" data-testid={`consultant-link-${m.id}`}>
++                        Join
++                      </a>
++                    ) : (
++                      <span className="small">Pending</span>
++                    )}
++                  </td>
++                </tr>
++              );
++            })}
++            {items.length === 0 && (
++              <tr>
++                <td colSpan={4} className="small">No consultations booked yet.</td>
++              </tr>
++            )}
++          </tbody>
++        </table>
++      </div>
++    </div>
++  );
++}
+diff --git a/repository_after/meeting-scheduler/web/src/pages/Login.tsx b/repository_after/meeting-scheduler/web/src/pages/Login.tsx
+new file mode 100644
+index 0000000..5b3ac80
+--- /dev/null
++++ b/repository_after/meeting-scheduler/web/src/pages/Login.tsx
+@@ -0,0 +1,62 @@
++import React, { useState } from "react";
++import { Link, useNavigate } from "react-router-dom";
++import { login as doLogin } from "../lib/auth";
++
++export default function Login() {
++  const nav = useNavigate();
++  const [email, setEmail] = useState("");
++  const [password, setPassword] = useState("");
++  const [busy, setBusy] = useState(false);
++  const [err, setErr] = useState<string | null>(null);
++
++  return (
++    <div className="container">
++      <div className="card">
++        <h2>Login</h2>
++        <div className="small">Sign in to manage bookings.</div>
++        <div style={{ height: 16 }} />
++
++        <label>Email</label>
++        <input data-testid="login-email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" />
++
++        <div style={{ height: 10 }} />
++
++        <label>Password</label>
++        <input data-testid="login-password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
++
++        {err && <div className="small" style={{ color: "#ffb4b4", marginTop: 8 }} data-testid="login-error">{err}</div>}
++
++        <div style={{ height: 12 }} />
++        <button
++          className="btn"
++          data-testid="login-submit"
++          disabled={busy}
++          onClick={async () => {
++            setBusy(true);
++            setErr(null);
++            try {
++              const result = await doLogin(email, password);
++              // Redirect based on role
++              if (result?.user?.role === "consultant") {
++                nav("/consultant");
++              } else {
++                nav("/slots");
++              }
++            } catch (e: any) {
++              setErr(e?.message || "Failed");
++            } finally {
++              setBusy(false);
++            }
++          }}
++        >
++          {busy ? "Signing in..." : "Sign in"}
++        </button>
++
++        <div style={{ height: 12 }} />
++        <div className="small">
++          No account? <Link to="/register">Register</Link>
++        </div>
++      </div>
++    </div>
++  );
++}
+diff --git a/repository_after/meeting-scheduler/web/src/pages/MyMeetings.tsx b/repository_after/meeting-scheduler/web/src/pages/MyMeetings.tsx
+new file mode 100644
+index 0000000..bfd7f49
+--- /dev/null
++++ b/repository_after/meeting-scheduler/web/src/pages/MyMeetings.tsx
+@@ -0,0 +1,97 @@
++import React, { useEffect, useState } from "react";
++import { apiFetch } from "../api/client";
++
++export default function MyMeetings() {
++  const [items, setItems] = useState<any[]>([]);
++  const [busy, setBusy] = useState(false);
++  const [err, setErr] = useState<string | null>(null);
++
++  async function load() {
++    setBusy(true);
++    setErr(null);
++    try {
++      const data = await apiFetch("/api/meetings/me");
++      setItems(data);
++    } catch (e: any) {
++      setErr(e?.message || "Failed");
++    } finally {
++      setBusy(false);
++    }
++  }
++
++  useEffect(() => {
++    load();
++  }, []);
++
++  return (
++    <div className="container">
++      <div className="header">
++        <div>
++          <h2 style={{ margin: 0 }}>My Meetings</h2>
++          <div className="small">Your booked and canceled meetings.</div>
++        </div>
++        <button className="btn secondary" onClick={load} disabled={busy} data-testid="refresh-my-meetings">
++          {busy ? "Loading..." : "Refresh"}
++        </button>
++      </div>
++
++      {err && <div className="card" style={{ borderColor: "#b42318" }} data-testid="mymeetings-error">{err}</div>}
++
++      <div className="card">
++        <table className="table" data-testid="mymeetings-table">
++          <thead>
++            <tr>
++              <th>Time</th>
++              <th>Status</th>
++              <th>Meet</th>
++              <th>Actions</th>
++            </tr>
++          </thead>
++          <tbody>
++            {items.map((m) => {
++              const start = new Date(m.start_at);
++              const end = new Date(m.end_at);
++              const label = `${start.toLocaleString()} – ${end.toLocaleTimeString()}`;
++              return (
++                <tr key={m.id} data-testid={`mymeeting-row-${m.id}`}>
++                  <td>{label}</td>
++                  <td><span className="badge">{m.status}</span></td>
++                  <td>
++                    {m.google_meet_link ? (
++                      <a href={m.google_meet_link} target="_blank" rel="noreferrer" data-testid={`mymeeting-link-${m.id}`}>
++                        Join
++                      </a>
++                    ) : (
++                      <span className="small">Pending</span>
++                    )}
++                  </td>
++                  <td>
++                    {m.status === "BOOKED" ? (
++                      <button
++                        className="btn danger"
++                        data-testid={`cancel-${m.id}`}
++                        onClick={async () => {
++                          await apiFetch(`/api/meetings/${m.id}/cancel`, { method: "POST" });
++                          await load();
++                        }}
++                      >
++                        Cancel
++                      </button>
++                    ) : (
++                      <span className="small">—</span>
++                    )}
++                  </td>
++                </tr>
++              );
++            })}
++            {items.length === 0 && (
++              <tr>
++                <td colSpan={4} className="small">No meetings yet.</td>
++              </tr>
++            )}
++          </tbody>
++        </table>
++      </div>
++    </div>
++  );
++}
+diff --git a/repository_after/meeting-scheduler/web/src/pages/Register.tsx b/repository_after/meeting-scheduler/web/src/pages/Register.tsx
+new file mode 100644
+index 0000000..0a30ea5
+--- /dev/null
++++ b/repository_after/meeting-scheduler/web/src/pages/Register.tsx
+@@ -0,0 +1,71 @@
++import React, { useState } from "react";
++import { Link, useNavigate } from "react-router-dom";
++import { register as reg } from "../lib/auth";
++
++export default function Register() {
++  const nav = useNavigate();
++  const [email, setEmail] = useState("");
++  const [password, setPassword] = useState("");
++  const [role, setRole] = useState<"user" | "consultant">("user");
++  const [busy, setBusy] = useState(false);
++  const [err, setErr] = useState<string | null>(null);
++
++  return (
++    <div className="container">
++      <div className="card">
++        <h2>Register</h2>
++        <div className="small">Create an account.</div>
++        <div style={{ height: 16 }} />
++
++        <label>Email</label>
++        <input data-testid="register-email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" />
++
++        <div style={{ height: 10 }} />
++
++        <label>Password</label>
++        <input data-testid="register-password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Min 6 chars" />
++
++        <div style={{ height: 10 }} />
++
++        <label>Account Type</label>
++        <select
++          data-testid="register-role"
++          value={role}
++          onChange={(e) => setRole(e.target.value as "user" | "consultant")}
++          style={{ width: "100%", padding: "8px", fontSize: "14px" }}
++        >
++          <option value="user">Normal User (Book consultations)</option>
++          <option value="consultant">Consultant (Create slots & view bookings)</option>
++        </select>
++
++        {err && <div className="small" style={{ color: "#ffb4b4", marginTop: 8 }} data-testid="register-error">{err}</div>}
++
++        <div style={{ height: 12 }} />
++        <button
++          className="btn"
++          data-testid="register-submit"
++          disabled={busy}
++          onClick={async () => {
++            setBusy(true);
++            setErr(null);
++            try {
++              await reg(email, password, role);
++              nav("/login");
++            } catch (e: any) {
++              setErr(e?.message || "Failed");
++            } finally {
++              setBusy(false);
++            }
++          }}
++        >
++          {busy ? "Creating..." : "Create account"}
++        </button>
++
++        <div style={{ height: 12 }} />
++        <div className="small">
++          Already have an account? <Link to="/login">Login</Link>
++        </div>
++      </div>
++    </div>
++  );
++}
+diff --git a/repository_after/meeting-scheduler/web/src/pages/Slots.tsx b/repository_after/meeting-scheduler/web/src/pages/Slots.tsx
+new file mode 100644
+index 0000000..41fb887
+--- /dev/null
++++ b/repository_after/meeting-scheduler/web/src/pages/Slots.tsx
+@@ -0,0 +1,164 @@
++import React, { useEffect, useMemo, useState } from "react";
++import { apiFetch } from "../api/client";
++import { SlotList, type Slot } from "../components/SlotList";
++import { BookingModal } from "../components/BookingModal";
++import type { SessionUser } from "../lib/auth";
++
++function toISO(d: Date) {
++  return d.toISOString();
++}
++
++type Consultant = {
++  id: string;
++  email: string;
++};
++
++export default function Slots({ user }: { user: SessionUser }) {
++  const [from, setFrom] = useState(() => {
++    const d = new Date();
++    d.setHours(0, 0, 0, 0);
++    return d;
++  });
++  const [to, setTo] = useState(() => {
++    const d = new Date();
++    d.setDate(d.getDate() + 7);
++    d.setHours(23, 59, 59, 999);
++    return d;
++  });
++
++  const [consultants, setConsultants] = useState<Consultant[]>([]);
++  const [selectedConsultantId, setSelectedConsultantId] = useState<string>("");
++  const [slots, setSlots] = useState<Slot[]>([]);
++  const [busy, setBusy] = useState(false);
++  const [err, setErr] = useState<string | null>(null);
++
++  const [selected, setSelected] = useState<Slot | null>(null);
++  const [confirm, setConfirm] = useState<any | null>(null);
++
++  const rangeLabel = useMemo(() => `${from.toLocaleDateString()} → ${to.toLocaleDateString()}`, [from, to]);
++
++  async function loadConsultants() {
++    try {
++      const data = await apiFetch("/api/slots/consultants");
++      if (Array.isArray(data)) {
++        setConsultants(data);
++        if (data.length > 0 && !selectedConsultantId) {
++          setSelectedConsultantId(data[0].id);
++        }
++      }
++    } catch (e: any) {
++      console.error("Failed to load consultants", e);
++      setErr(e?.message || "Failed to load consultants");
++    }
++  }
++
++  async function load() {
++    if (!selectedConsultantId) {
++      setSlots([]);
++      return;
++    }
++    setBusy(true);
++    setErr(null);
++    try {
++      const data = await apiFetch(`/api/slots?from=${encodeURIComponent(toISO(from))}&to=${encodeURIComponent(toISO(to))}&consultant_id=${encodeURIComponent(selectedConsultantId)}`);
++      setSlots(data);
++    } catch (e: any) {
++      setErr(e?.message || "Failed to load slots");
++    } finally {
++      setBusy(false);
++    }
++  }
++
++  useEffect(() => {
++    loadConsultants();
++    // eslint-disable-next-line react-hooks/exhaustive-deps
++  }, []);
++
++  useEffect(() => {
++    load();
++    // eslint-disable-next-line react-hooks/exhaustive-deps
++  }, [selectedConsultantId, from, to]);
++
++  return (
++    <div className="container">
++      <div className="header">
++        <div>
++          <h2 style={{ margin: 0 }}>Available Slots</h2>
++          <div className="small" data-testid="slot-range">{rangeLabel}</div>
++        </div>
++        <button className="btn secondary" onClick={load} disabled={busy} data-testid="refresh-slots">
++          {busy ? "Loading..." : "Refresh"}
++        </button>
++      </div>
++
++      {consultants.length > 0 && (
++        <div className="card" style={{ marginBottom: 16 }}>
++          <label>Select Consultant</label>
++          <select
++            value={selectedConsultantId}
++            onChange={(e) => setSelectedConsultantId(e.target.value)}
++            data-testid="consultant-select"
++            style={{ width: "100%", padding: "8px", fontSize: "14px", marginTop: "8px" }}
++          >
++            <option value="">-- Select a consultant --</option>
++            {consultants.map((c) => (
++              <option key={c.id} value={c.id}>
++                {c.email}
++              </option>
++            ))}
++          </select>
++        </div>
++      )}
++
++
++      {err && <div className="card" style={{ borderColor: "#b42318" }} data-testid="slots-error">{err}</div>}
++
++      <SlotList
++        slots={slots}
++        onBook={(s) => {
++          setConfirm(null);
++          setSelected(s);
++        }}
++      />
++
++      <BookingModal
++        open={!!selected}
++        onClose={() => setSelected(null)}
++        slotLabel={selected ? `${new Date(selected.start_at).toLocaleString()}` : ""}
++        onConfirm={async (description) => {
++          if (!selected) return;
++          try {
++            const res = await apiFetch("/api/meetings", {
++              method: "POST",
++              body: JSON.stringify({ slot_id: selected.id, description }),
++            });
++            setConfirm(res);
++            setSelected(null);
++            await load();
++          } catch (e: any) {
++            // Error will be shown in the modal
++            throw e;
++          }
++        }}
++      />
++
++      {confirm && (
++        <div className="card" style={{ marginTop: 12 }} data-testid="booking-confirm">
++          <div style={{ fontWeight: 700 }}>Booking Confirmed</div>
++          <div className="small">Status: <span className="badge">{confirm.status}</span></div>
++          <div style={{ height: 8 }} />
++          <div className="small">Meet link:</div>
++          <div data-testid="meet-link">
++            {confirm.google_meet_link ? (
++              <a href={confirm.google_meet_link} target="_blank" rel="noreferrer">
++                {confirm.google_meet_link}
++              </a>
++            ) : (
++              <span className="small">Meet link pending / not configured ({confirm.meet_status})</span>
++            )}
++          </div>
++        </div>
++      )}
++    </div>
++  );
++}
+diff --git a/repository_after/meeting-scheduler/web/src/react-shim.d.ts b/repository_after/meeting-scheduler/web/src/react-shim.d.ts
+new file mode 100644
+index 0000000..c072c47
+--- /dev/null
++++ b/repository_after/meeting-scheduler/web/src/react-shim.d.ts
+@@ -0,0 +1,61 @@
++// Temporary type shim for React when node_modules is not available locally
++// This allows TypeScript to understand JSX without requiring @types/react to be installed
++
++// Global JSX namespace - required for react-jsx mode
++declare global {
++  namespace JSX {
++    interface IntrinsicElements {
++      [elemName: string]: any;
++    }
++  }
++}
++
++declare module "react" {
++  export = React;
++  export as namespace React;
++  
++  namespace React {
++    type ReactNode = any;
++    type ReactElement = any;
++    type ComponentType<P = {}> = any;
++    type FC<P = {}> = (props: P) => ReactElement | null;
++    
++    function useState<T>(initialState: T | (() => T)): [T, (value: T | ((prev: T) => T)) => void];
++    function useEffect(effect: () => void | (() => void), deps?: any[]): void;
++    
++    interface SyntheticEvent<T = Element, E = Event> {
++      target: T;
++      currentTarget: T;
++      stopPropagation(): void;
++    }
++    
++    interface MouseEvent<T = Element, E = globalThis.MouseEvent> extends SyntheticEvent<T, E> {}
++    interface ChangeEvent<T = Element> extends SyntheticEvent<T> {
++      target: T & { value: string };
++    }
++  }
++  
++  const React: {
++    useState: typeof React.useState;
++    useEffect: typeof React.useEffect;
++  };
++  
++  export default React;
++}
++
++// Explicit module declaration for react/jsx-runtime
++declare module "react/jsx-runtime" {
++  type ReactElement = any;
++  export function jsx(type: any, props: any, key?: string | number | null): ReactElement;
++  export function jsxs(type: any, props: any, key?: string | number | null): ReactElement;
++  export const Fragment: any;
++}
++
++// Also declare as react/jsx-dev-runtime for development
++declare module "react/jsx-dev-runtime" {
++  type ReactElement = any;
++  export function jsxDEV(type: any, props: any, key?: string | number | null, isStaticChildren?: boolean, source?: any, self?: any): ReactElement;
++  export const Fragment: any;
++}
++
++export {};
+diff --git a/repository_after/meeting-scheduler/web/src/styles.css b/repository_after/meeting-scheduler/web/src/styles.css
+new file mode 100644
+index 0000000..069a357
+--- /dev/null
++++ b/repository_after/meeting-scheduler/web/src/styles.css
+@@ -0,0 +1,23 @@
++*{box-sizing:border-box}
++body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,Noto Sans,sans-serif;background:#0b0c10;color:#eaeaea}
++a{color:#9ad1ff;text-decoration:none}
++.container{max-width:1000px;margin:0 auto;padding:16px}
++.card{background:#12141a;border:1px solid #232633;border-radius:12px;padding:14px}
++.row{display:flex;gap:12px;flex-wrap:wrap}
++.btn{background:#1f6feb;border:none;color:white;padding:10px 12px;border-radius:10px;cursor:pointer}
++.btn.secondary{background:#2d333b}
++.btn.danger{background:#b42318}
++.btn:disabled{opacity:.6;cursor:not-allowed}
++input,textarea{width:100%;padding:10px;border-radius:10px;border:1px solid #2d333b;background:#0f1117;color:#eaeaea}
++label{font-size:12px;color:#b9c0ce}
++.nav{display:flex;gap:14px;align-items:center;flex-wrap:wrap}
++.nav a{padding:8px 10px;border-radius:10px}
++.nav a.active{background:#12141a;border:1px solid #232633}
++.header{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:12px}
++.small{font-size:12px;color:#b9c0ce}
++.table{width:100%;border-collapse:collapse}
++.table th,.table td{padding:10px;border-bottom:1px solid #232633;text-align:left}
++.badge{padding:4px 8px;border-radius:999px;background:#232633;font-size:12px}
++@media (max-width:600px){.table th:nth-child(3),.table td:nth-child(3){display:none}}
++.modalBackdrop{position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;padding:16px}
++.modal{max-width:520px;width:100%}
+diff --git a/repository_after/meeting-scheduler/web/src/vite-env.d.ts b/repository_after/meeting-scheduler/web/src/vite-env.d.ts
+new file mode 100644
+index 0000000..66ac650
+--- /dev/null
++++ b/repository_after/meeting-scheduler/web/src/vite-env.d.ts
+@@ -0,0 +1,13 @@
++/// <reference types="vite/client" />
++/// <reference path="./react-shim.d.ts" />
++
++interface ImportMetaEnv {
++  readonly VITE_API_BASE_URL?: string;
++  readonly VITE_AUTH_BASE_URL?: string;
++  [key: string]: any;
++}
++
++interface ImportMeta {
++  readonly env: ImportMetaEnv;
++}
++
+diff --git a/repository_after/meeting-scheduler/web/tsconfig.json b/repository_after/meeting-scheduler/web/tsconfig.json
+new file mode 100644
+index 0000000..6da5027
+--- /dev/null
++++ b/repository_after/meeting-scheduler/web/tsconfig.json
+@@ -0,0 +1,24 @@
++{
++  "compilerOptions": {
++    "target": "ES2022",
++    "useDefineForClassFields": true,
++    "lib": [
++      "ES2022",
++      "DOM",
++      "DOM.Iterable"
++    ],
++    "module": "ESNext",
++    "skipLibCheck": true,
++    "moduleResolution": "Bundler",
++    "resolveJsonModule": true,
++    "isolatedModules": true,
++    "noEmit": true,
++    "jsx": "react",
++    "strict": true,
++    "esModuleInterop": true,
++    "allowSyntheticDefaultImports": true
++  },
++  "include": [
++    "src"
++  ]
++}
+\ No newline at end of file
+diff --git a/repository_after/meeting-scheduler/web/vite.config.ts b/repository_after/meeting-scheduler/web/vite.config.ts
+new file mode 100644
+index 0000000..7322405
+--- /dev/null
++++ b/repository_after/meeting-scheduler/web/vite.config.ts
+@@ -0,0 +1,10 @@
++import { defineConfig } from "vite";
++import react from "@vitejs/plugin-react";
++
++export default defineConfig({
++  plugins: [react()],
++  server: {
++    port: 5173,
++    host: true,
++  },
++});
