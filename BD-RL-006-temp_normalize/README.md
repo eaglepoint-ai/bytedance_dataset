@@ -34,11 +34,13 @@ Example: `"temp_user_1"` → `"TEMP_USER_1"` (underscores preserved)
 - `tests/test_performance_improvement.py` - Performance benchmarks
 
 ### Evaluation & Metrics
+- `evaluation/run_evaluation.py` - Full evaluation runner (generates report.json)
 - `evaluation/compare_metrics.py` - Metric comparison script
 - `evaluation/pylint_score_before.txt` - Pylint score (before)
 - `evaluation/pylint_score_after.txt` - Pylint score (after)
 - `evaluation/radon_report_before.json` - Complexity metrics (before)
 - `evaluation/radon_report_after.json` - Complexity metrics (after)
+- `evaluation/reports/` - Generated reports (date/time/report.json)
 
 ### Documentation
 - `instances/todo_refactor_001.json` - Task specification
@@ -47,7 +49,7 @@ Example: `"temp_user_1"` → `"TEMP_USER_1"` (underscores preserved)
 
 ### Infrastructure
 - `Dockerfile` - Test environment
-- `docker-compose.yml` - Orchestrates tests and metrics
+- `docker-compose.yml` - Single app service for running all commands
 - `requirements.txt` - Python dependencies
 
 ## Quick Start
@@ -68,26 +70,41 @@ pytest tests/test_performance_improvement.py -v
 
 ### Run with Docker Compose (Recommended)
 ```bash
-# Run all tests and compare metrics
-docker-compose up test-before test-after generate-metrics compare-metrics
+# Build the container
+docker compose build
 
-# Just run tests
-docker-compose up test-before test-after
+# Run full evaluation (tests + metrics + report.json)
+docker compose run --rm app python evaluation/run_evaluation.py
 
-# Just generate and compare metrics
-docker-compose up generate-metrics compare-metrics
+# Run tests on before version
+docker compose run --rm -e PYTHONPATH=/app/repository_before app pytest -v tests/
+
+# Run tests on after version
+docker compose run --rm -e PYTHONPATH=/app/repository_after app pytest -v tests/
+
+# Generate metrics manually
+docker compose run --rm app sh -c "\
+  pylint repository_before/ids.py | tail -n 2 > evaluation/pylint_score_before.txt && \
+  pylint repository_after/ids.py | tail -n 2 > evaluation/pylint_score_after.txt && \
+  radon cc -j repository_before/ids.py > evaluation/radon_report_before.json && \
+  radon cc -j repository_after/ids.py > evaluation/radon_report_after.json"
+
+# Compare metrics
+docker compose run --rm app python evaluation/compare_metrics.py
 ```
 
 ### Run Individual Containers
 ```bash
 # Build image
-docker build -t temp-normalize .
+docker compose build
 
-# Test before version
-docker run --rm -e PYTHONPATH=/app/repository_before temp-normalize
+# Run any command
+docker compose run --rm app <command>
 
-# Test after version
-docker run --rm -e PYTHONPATH=/app/repository_after temp-normalize
+# Examples:
+docker compose run --rm app pytest -v tests/
+docker compose run --rm app python evaluation/run_evaluation.py
+docker compose run --rm app pylint repository_after/ids.py
 ```
 
 ## Understanding the Results
@@ -115,13 +132,13 @@ The refactoring demonstrates:
 
 ### Example Test Results
 ```
-test-before:
+repository_before (PYTHONPATH=/app/repository_before):
   test_old_behavior_unchanged_abc_underscore_123 PASSED
   test_old_behavior_unchanged_spaces_collapse PASSED
   test_temp_preserves_underscores FAILED
   test_temp_mixed_symbols_example FAILED
 
-test-after:
+repository_after (PYTHONPATH=/app/repository_after):
   test_old_behavior_unchanged_abc_underscore_123 PASSED
   test_old_behavior_unchanged_spaces_collapse PASSED
   test_temp_preserves_underscores PASSED
@@ -191,15 +208,26 @@ This means:
 
 ## Metrics Generation
 
+### Full Evaluation (Recommended)
 ```bash
-# Generate all metrics
-docker-compose up generate-metrics
+# Run complete evaluation with structured report
+docker compose run --rm app python evaluation/run_evaluation.py
 
-# This runs:
-pylint repository_before/ids.py > evaluation/pylint_score_before.txt
-pylint repository_after/ids.py > evaluation/pylint_score_after.txt
-radon cc -j repository_before/ids.py > evaluation/radon_report_before.json
-radon cc -j repository_after/ids.py > evaluation/radon_report_after.json
+# Reports are saved to: evaluation/reports/YYYY-MM-DD/HH-MM-SS/report.json
+# Latest report also saved to: evaluation/latest_report.json
+```
+
+### Manual Metrics Generation
+```bash
+# Generate pylint and radon metrics
+docker compose run --rm app sh -c "\
+  pylint repository_before/ids.py | tail -n 2 > evaluation/pylint_score_before.txt && \
+  pylint repository_after/ids.py | tail -n 2 > evaluation/pylint_score_after.txt && \
+  radon cc -j repository_before/ids.py > evaluation/radon_report_before.json && \
+  radon cc -j repository_after/ids.py > evaluation/radon_report_after.json"
+
+# Compare metrics
+docker compose run --rm app python evaluation/compare_metrics.py
 ```
 
 ## Use Cases

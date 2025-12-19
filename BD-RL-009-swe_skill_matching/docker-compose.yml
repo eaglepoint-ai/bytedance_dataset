@@ -1,5 +1,3 @@
-version: "3.9"
-
 services:
   app:
     build:
@@ -15,8 +13,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-      target: build
-    image: swe_skill_matching:build
+      target: tests
+    image: swe_skill_matching:tests
     container_name: swe_skill_matching_tests
-    command: ["dotnet", "test", "tests/tests.csproj", "-c", "Release", "-v", "minimal"]
+    command: ["dotnet", "test", "tests/tests.csproj", "-c", "Release", "--no-build", "-v", "minimal"]
     working_dir: /src

@@ -4,8 +4,8 @@ services:
       context: .
       dockerfile: Dockerfile
       target: runtime
-    image: bd-rl-009-swe_skill_matching:runtime
-    container_name: bd_rl_009_swe_skill_matching_after
+    image: bd-rl-002-sw_crm_contact_search:runtime
+    container_name: bd_rl_002_sw_crm_contact_search_after
     stdin_open: true
     tty: true
 
@@ -14,7 +14,7 @@ services:
       context: .
       dockerfile: Dockerfile
       target: build
-    image: bd-rl-009-swe_skill_matching:build
-    container_name: bd_rl_009_swe_skill_matching_tests
+    image: bd-rl-002-sw_crm_contact_search:build
+    container_name: bd_rl_002_sw_crm_contact_search_tests
     command: ["dotnet", "test", "tests/tests.csproj", "-c", "Release", "-v", "minimal"]
     working_dir: /src
