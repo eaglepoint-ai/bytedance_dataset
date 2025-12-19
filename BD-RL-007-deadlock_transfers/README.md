@@ -61,13 +61,30 @@ The solution **must not**:
 
 ---
 
-### Setup Instructions
+## How to Run
+
+### Single Command (Recommended)
+
+Run everything with a single command:
+
+```bash
+./run_all.sh
+```
+
+This will:
+- Build the Docker image
+- Start PostgreSQL database
+- Run tests for before implementation (expected to fail due to deadlocks)
+- Run tests for after implementation (expected to pass)
+- Run evaluation and generate `evaluation/report.json`
+
+### Manual Steps
 
 #### Build the Docker Image
 
 ```bash
 docker build -t deadlock-transfers .
-````
+```
 
 #### Start PostgreSQL
 
@@ -81,86 +98,53 @@ Verify the database is running:
 docker compose ps
 ```
 
----
+#### Run Tests
 
-### Running Tests
-
-All tests are deterministic and rely on controlled concurrency.
-
-### AFTER (Expected to Pass)
+**BEFORE (Expected to Fail due to Deadlocks):**
 
 ```bash
-docker run --rm \
-  --network task_003_deadlock_transfers_default \
-  -e PYTHONPATH=/app/repository_after \
-  -e DATABASE_URL=postgresql://app:app@db:5432/appdb \
-  deadlock-transfers \
-  pytest -q
+docker compose run --rm test-before
 ```
 
-### BEFORE (Expected to Fail or Be Flaky)
+Or using docker run:
 
 ```bash
 docker run --rm \
-  --network task_003_deadlock_transfers_default \
+  --network bd-rl-007-deadlock_transfers_default \
   -e PYTHONPATH=/app/repository_before \
   -e DATABASE_URL=postgresql://app:app@db:5432/appdb \
   deadlock-transfers \
   pytest -q
 ```
 
-## Performance & Stability Benchmark
-
-The benchmark measures:
-* Frequency of concurrency failures
-* Runtime performance under contention
-* SQL statement count per workload
-
-### Run Benchmark Comparison
+**AFTER (Expected to Pass):**
 
 ```bash
-bash evaluation/compare_benchmarks.sh deadlock-transfers
+docker compose run --rm test-after
 ```
 
-### Output Files
-
-* `evaluation/bench_before.txt`
-* `evaluation/bench_after.txt`
-
-Typical behavior:
-
-* **BEFORE**: frequent deadlocks or failures, slower runtime
-* **AFTER**: zero failures, significantly faster execution
-
-## Unified Runner (Recommended)
-
-A single entry-point script is provided:
+Or using docker run:
 
 ```bash
-bash evaluation/run.sh tests after
-bash evaluation/run.sh tests before
-bash evaluation/run.sh bench after
-bash evaluation/run.sh bench before
+docker run --rm \
+  --network bd-rl-007-deadlock_transfers_default \
+  -e PYTHONPATH=/app/repository_after \
+  -e DATABASE_URL=postgresql://app:app@db:5432/appdb \
+  deadlock-transfers \
+  pytest -q
 ```
 
-This is the preferred way to run the task for automated evaluation.
-
----
-
-### Static Analysis (Optional)
-
-Run linting and complexity analysis:
+#### Run Evaluation
 
 ```bash
-bash evaluation/generate_reports.sh
+docker compose run --rm app python evaluation/evaluation.py
 ```
 
-Generated artifacts:
-
-* `evaluation/pylint_score_before.txt`
-* `evaluation/pylint_score_after.txt`
-* `evaluation/radon_report_before.json`
-* `evaluation/radon_report_after.json`
+This will:
+- Run tests for both before and after implementations
+- Run performance benchmarks under concurrency
+- Measure deadlock frequency and performance improvements
+- Generate `evaluation/report.json`
 
 
 
