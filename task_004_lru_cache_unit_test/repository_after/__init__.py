@@ -1,2 +1,0 @@
-"""LRU cache package initializer."""
-
