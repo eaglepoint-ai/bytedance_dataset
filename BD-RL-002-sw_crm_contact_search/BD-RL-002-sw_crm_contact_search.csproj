@@ -12,11 +12,15 @@
     <Compile Remove="repository_before\**" />
     <Compile Remove="tests/**/*.cs" />
     <Compile Remove="tests\**" />
+    <Compile Remove="evaluation/**/*.cs" />
+    <Compile Remove="evaluation\**" />
     <EmbeddedResource Remove="repository_after\**" />
     <EmbeddedResource Remove="repository_before\**" />
     <EmbeddedResource Remove="tests\**" />
+    <EmbeddedResource Remove="evaluation\**" />
     <None Remove="repository_after\**" />
     <None Remove="repository_before\**" />
     <None Remove="tests\**" />
+    <None Remove="evaluation\**" />
   </ItemGroup>
 </Project>

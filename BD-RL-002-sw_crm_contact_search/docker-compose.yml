@@ -1,13 +1,11 @@
-version: "3.9"
-
 services:
   app:
     build:
       context: .
       dockerfile: Dockerfile
       target: runtime
-    image: sw_crm_contact_search:runtime
-    container_name: crm_contact_search_after
+    image: bd-rl-002-sw_crm_contact_search:runtime
+    container_name: bd_rl_002_crm_contact_search_after
     stdin_open: true
     tty: true
 
@@ -16,7 +14,7 @@ services:
       context: .
       dockerfile: Dockerfile
       target: build
-    image: sw_crm_contact_search:build
-    container_name: crm_contact_search_tests
+    image: bd-rl-002-sw_crm_contact_search:build
+    container_name: bd_rl_002_crm_contact_search_tests
     command: ["dotnet", "test", "tests/tests.csproj", "-c", "Release", "-v", "minimal"]
     working_dir: /src
