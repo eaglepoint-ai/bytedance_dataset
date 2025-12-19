@@ -1,4 +1,4 @@
-const { Server } = require("socket.io");
+import { Server } from "socket.io";
 
 const rooms = new Map();
 const userMeta = new Map();
@@ -11,4 +11,4 @@ const initializeSocket = (server) => {
   return io;
 };
 
-module.exports = { initializeSocket, rooms, userMeta };
+export { initializeSocket, rooms, userMeta };

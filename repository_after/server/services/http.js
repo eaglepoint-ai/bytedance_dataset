@@ -1,7 +1,5 @@
-const http = require("http");
+import { createServer as _createServer } from "http";
 
-const createServer = (app) => {
-  return http.createServer(app);
+export const createServer = (app) => {
+  return _createServer(app);
 };
-
-module.exports = { createServer };

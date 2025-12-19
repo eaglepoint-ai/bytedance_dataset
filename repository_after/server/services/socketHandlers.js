@@ -1,10 +1,8 @@
-const { rooms, userMeta } = require("./socket");
-const { getRandomColor } = require("../utils/color");
+import { userMeta, rooms } from "./socket.js";
+import { getRandomColor } from "../utils/color.js";
 
-const handleConnection = (io) => {
+export const handleConnection = (io) => {
   io.on("connection", (socket) => {
-    console.log("User connected:", socket.id);
-
     socket.on("join-room", ({ roomId, username }) => {
       socket.join(roomId);
 
@@ -66,5 +64,3 @@ const handleConnection = (io) => {
     });
   });
 };
-
-module.exports = { handleConnection };

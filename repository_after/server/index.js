@@ -1,7 +1,7 @@
-const { initializeExpress } = require("./services/express");
-const { createServer } = require("./services/http");
-const { initializeSocket } = require("./services/socket");
-const { handleConnection } = require("./services/socketHandlers");
+import { initializeExpress } from "./services/express.js";
+import { createServer } from "./services/http.js";
+import { initializeSocket } from "./services/socket.js";
+import { handleConnection } from "./services/socketHandlers.js";
 
 const app = initializeExpress();
 const server = createServer(app);
