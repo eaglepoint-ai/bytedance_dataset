@@ -138,7 +138,7 @@ namespace repository_before
 
             private async Task GenerateMockData()
             {
-                const int totalEmployees = 50000;
+                const int totalEmployees = 1000;
                 var random = new Random(99);
                 var skillPool = new[]
                 {

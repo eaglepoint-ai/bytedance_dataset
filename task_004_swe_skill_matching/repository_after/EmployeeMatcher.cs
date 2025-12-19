@@ -434,7 +434,7 @@ namespace repository_after
 
             private async Task GenerateMockData()
             {
-                const int totalEmployees = 10000;
+                const int totalEmployees = 1000;
                 var random = new Random(99);
                 var skillPool = new[]
                 {

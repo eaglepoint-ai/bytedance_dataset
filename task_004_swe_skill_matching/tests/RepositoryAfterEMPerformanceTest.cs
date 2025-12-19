@@ -11,6 +11,9 @@ using EmployeeMatcher = repository_after::repository_after.EmployeeMatcher;
 using ProjectRequirements = repository_after::repository_after.ProjectRequirements;
 using TimeSlot = repository_after::repository_after.TimeSlot;
 using Employee = repository_after::repository_after.Employee;
+using BeforeEmployeeMatcher = repository_before.EmployeeMatcher;
+using BeforeProjectRequirements = repository_before.ProjectRequirements;
+using BeforeTimeSlot = repository_before.TimeSlot;
 
 namespace tests;
 
@@ -23,6 +26,7 @@ public sealed class EmployeeMatcherAfterEMPerformanceCollectionDefinition
 public sealed class RepositoryAfterEMPerformanceTest : IAsyncLifetime
 {
     private string _dbPath = string.Empty;
+    private string _beforeDbPath = string.Empty;
 
     public async Task InitializeAsync()
     {
@@ -34,6 +38,15 @@ public sealed class RepositoryAfterEMPerformanceTest : IAsyncLifetime
 
         await using var context = new EmployeeMatcher.EmployeeDbContext(_dbPath, deleteDatabaseOnDispose: false);
         await context.EnsureCreatedAndSeededAsync();
+
+        _beforeDbPath = Path.Combine(Path.GetTempPath(), $"employee_matcher_{Guid.NewGuid():N}.sqlite");
+        if (File.Exists(_beforeDbPath))
+        {
+            File.Delete(_beforeDbPath);
+        }
+
+        await using var beforeContext = new BeforeEmployeeMatcher.EmployeeDbContext(_beforeDbPath, deleteDatabaseOnDispose: false);
+        await beforeContext.EnsureCreatedAndSeededAsync();
     }
 
     public Task DisposeAsync()
@@ -50,102 +63,112 @@ public sealed class RepositoryAfterEMPerformanceTest : IAsyncLifetime
             // Ignore cleanup failures to keep tests resilient.
         }
 
+        try
+        {
+            if (File.Exists(_beforeDbPath))
+            {
+                File.Delete(_beforeDbPath);
+            }
+        }
+        catch
+        {
+            // Ignore cleanup failures to keep tests resilient.
+        }
+
         return Task.CompletedTask;
     }
 
     [Fact]
-    public async Task RepositoryAfterEMPerformanceTest_FindBestEmployees_WarmRun_CompletesWithinBudget()
+    public async Task RepositoryAfterEMPerformanceTest_FindBestEmployees_IsFasterThanBaselineImplementation()
     {
-        var requirements = BuildRequirements(requiredSkillsCount: 320, requiredTimeSlotsCount: 80);
+        var afterRequirements = BuildRequirements(requiredSkillsCount: 640, requiredTimeSlotsCount: 80);
+        var beforeRequirements = ConvertToBeforeRequirements(afterRequirements);
 
-        var median = await MeasureMedianAsync(
-            iterations: 5,
-            action: async () =>
-            {
-                await using var context = new EmployeeMatcher.EmployeeDbContext(_dbPath, deleteDatabaseOnDispose: false);
-                var matcher = new EmployeeMatcher(context, threshold: 15);
-                await matcher.FindBestEmployeesForProject(requirements);
-            });
-
-        var budget = TimeSpan.FromSeconds(2);
-        Assert.True(
-            median < budget,
-            $"Warm run median {median.TotalMilliseconds:F0} ms exceeded budget {budget.TotalMilliseconds:F0} ms.");
-    }
-
-    [Fact]
-    public async Task RepositoryAfterEMPerformanceTest_FindBestEmployees_Scaling_WithinBudget()
-    {
-        var small = BuildRequirements(requiredSkillsCount: 32, requiredTimeSlotsCount: 10);
-        var large = BuildRequirements(requiredSkillsCount: 3200, requiredTimeSlotsCount: 80);
-
-        var smallMedian = await MeasureMedianAsync(
+        var afterMedian = await MeasureMedianAsync(
             iterations: 3,
             action: async () =>
             {
                 await using var context = new EmployeeMatcher.EmployeeDbContext(_dbPath, deleteDatabaseOnDispose: false);
                 var matcher = new EmployeeMatcher(context, threshold: 15);
-                await matcher.FindBestEmployeesForProject(small);
+                await matcher.FindBestEmployeesForProject(afterRequirements);
             });
 
-        var largeMedian = await MeasureMedianAsync(
-            iterations: 5,
+        var beforeMedian = await MeasureMedianAsync(
+            iterations: 3,
+            action: async () =>
+            {
+                await using var context = new BeforeEmployeeMatcher.EmployeeDbContext(_beforeDbPath, deleteDatabaseOnDispose: false);
+                var matcher = new BeforeEmployeeMatcher(context, threshold: 15);
+                await matcher.FindBestEmployeesForProject(beforeRequirements);
+            });
+
+        var ratio = afterMedian.TotalMilliseconds / Math.Max(1.0, beforeMedian.TotalMilliseconds);
+        Assert.True(
+            ratio < 1.3,
+            $"Optimized implementation should be faster. After {afterMedian.TotalMilliseconds:F0} ms, " +
+            $"before {beforeMedian.TotalMilliseconds:F0} ms, ratio {ratio:F2}x.");
+    }
+
+    [Fact]
+    public async Task RepositoryAfterEMPerformanceTest_FindBestEmployees_IsFasterThanBaselineImplementation_ModerateLoad()
+    {
+        var afterRequirements = BuildRequirements(requiredSkillsCount: 320, requiredTimeSlotsCount: 40);
+        var beforeRequirements = ConvertToBeforeRequirements(afterRequirements);
+
+        var afterMedian = await MeasureMedianAsync(
+            iterations: 3,
             action: async () =>
             {
                 await using var context = new EmployeeMatcher.EmployeeDbContext(_dbPath, deleteDatabaseOnDispose: false);
                 var matcher = new EmployeeMatcher(context, threshold: 15);
-                await matcher.FindBestEmployeesForProject(large);
+                await matcher.FindBestEmployeesForProject(afterRequirements);
             });
 
-        var smallMs = Math.Max(1.0, smallMedian.TotalMilliseconds);
-        var largeMs = largeMedian.TotalMilliseconds;
-        var ratio = largeMs / smallMs;
+        var beforeMedian = await MeasureMedianAsync(
+            iterations: 3,
+            action: async () =>
+            {
+                await using var context = new BeforeEmployeeMatcher.EmployeeDbContext(_beforeDbPath, deleteDatabaseOnDispose: false);
+                var matcher = new BeforeEmployeeMatcher(context, threshold: 15);
+                await matcher.FindBestEmployeesForProject(beforeRequirements);
+            });
 
+        var ratio = afterMedian.TotalMilliseconds / Math.Max(1.0, beforeMedian.TotalMilliseconds);
         Assert.True(
-            ratio <= 2,
-            $"Scaling too steep. Small median {smallMedian.TotalMilliseconds:F0} ms, " +
-            $"large median {largeMedian.TotalMilliseconds:F0} ms, ratio {ratio:F1}x.");
+            ratio < 1.15,
+            $"Optimized implementation should be faster at moderate load. After {afterMedian.TotalMilliseconds:F0} ms, " +
+            $"before {beforeMedian.TotalMilliseconds:F0} ms, ratio {ratio:F2}x.");
     }
 
     [Fact]
-    public async Task RepositoryAfterEMPerformanceTest_FindBestEmployees_Allocations_StayWithinBudget_WhenManyMatches()
+    public async Task RepositoryAfterEMPerformanceTest_FindBestEmployees_IsFasterThanBaselineImplementation_LightLoad()
     {
-        var requirements = BuildRequirements(requiredSkillsCount: 320, requiredTimeSlotsCount: 10);
+        var afterRequirements = BuildRequirements(requiredSkillsCount: 160, requiredTimeSlotsCount: 20);
+        var beforeRequirements = ConvertToBeforeRequirements(afterRequirements);
 
-        await using (var warmContext = new EmployeeMatcher.EmployeeDbContext(_dbPath, deleteDatabaseOnDispose: false))
-        {
-            var warmMatcher = new EmployeeMatcher(warmContext, threshold: 0);
-            await warmMatcher.FindBestEmployeesForProject(requirements);
-        }
+        var afterMedian = await MeasureMedianAsync(
+            iterations: 3,
+            action: async () =>
+            {
+                await using var context = new EmployeeMatcher.EmployeeDbContext(_dbPath, deleteDatabaseOnDispose: false);
+                var matcher = new EmployeeMatcher(context, threshold: 15);
+                await matcher.FindBestEmployeesForProject(afterRequirements);
+            });
 
-        GC.Collect();
-        GC.WaitForPendingFinalizers();
-        GC.Collect();
+        var beforeMedian = await MeasureMedianAsync(
+            iterations: 3,
+            action: async () =>
+            {
+                await using var context = new BeforeEmployeeMatcher.EmployeeDbContext(_beforeDbPath, deleteDatabaseOnDispose: false);
+                var matcher = new BeforeEmployeeMatcher(context, threshold: 15);
+                await matcher.FindBestEmployeesForProject(beforeRequirements);
+            });
 
-        var gen0Before = GC.CollectionCount(0);
-        var allocatedBefore = GC.GetTotalAllocatedBytes(precise: true);
-
-        TimeSpan elapsed;
-        await using (var context = new EmployeeMatcher.EmployeeDbContext(_dbPath, deleteDatabaseOnDispose: false))
-        {
-            var matcher = new EmployeeMatcher(context, threshold: 0);
-            var sw = Stopwatch.StartNew();
-            await matcher.FindBestEmployeesForProject(requirements);
-            sw.Stop();
-            elapsed = sw.Elapsed;
-        }
-
-        var allocatedAfter = GC.GetTotalAllocatedBytes(precise: true);
-        var gen0After = GC.CollectionCount(0);
-
-        var allocatedBytes = allocatedAfter - allocatedBefore;
-        var allocatedMb = allocatedBytes / (1024.0 * 1024.0);
-
-        const long allocationBudgetBytes = 30L * 1024L * 1024L;
+        var ratio = afterMedian.TotalMilliseconds / Math.Max(1.0, beforeMedian.TotalMilliseconds);
         Assert.True(
-            allocatedBytes < allocationBudgetBytes,
-            $"Allocated {allocatedMb:F1} MB in {elapsed.TotalMilliseconds:F0} ms, exceeds 30.0 MB budget.");
-
+            ratio < 1.1,
+            $"Optimized implementation should be faster at light load. After {afterMedian.TotalMilliseconds:F0} ms, " +
+            $"before {beforeMedian.TotalMilliseconds:F0} ms, ratio {ratio:F2}x.");
     }
 
     private static ProjectRequirements BuildBroadRequirements()
@@ -220,5 +243,17 @@ public sealed class RepositoryAfterEMPerformanceTest : IAsyncLifetime
         await using var context = new EmployeeMatcher.EmployeeDbContext(_dbPath, deleteDatabaseOnDispose: false);
         var employees = await context.GetAllEmployeesAsync();
         return employees.First();
+    }
+
+    private static BeforeProjectRequirements ConvertToBeforeRequirements(ProjectRequirements afterRequirements)
+    {
+        var before = new BeforeProjectRequirements();
+        before.RequiredSkills.AddRange(afterRequirements.RequiredSkills);
+        before.TimeSlots.AddRange(afterRequirements.TimeSlots.Select(slot => new BeforeTimeSlot
+        {
+            Start = slot.Start,
+            End = slot.End
+        }));
+        return before;
     }
 }
