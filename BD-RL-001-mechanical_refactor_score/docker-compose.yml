@@ -1,0 +1,30 @@
+services:
+  sut:
+    build: .
+    command: pytest -q tests/test_score.py
+  
+  test-before:
+    build: .
+    environment:
+      - PYTHONPATH=/app/repository_before
+    command: pytest -q tests/test_score.py
+  
+  test-after:
+    build: .
+    environment:
+      - PYTHONPATH=/app/repository_after
+    command: pytest -q tests/test_score.py
+  
+  test-equivalence:
+    build: .
+    command: pytest -q tests/test_calc_score_equivalence.py
+  
+  test-all:
+    build: .
+    command: pytest -q tests/test_structure.py tests/test_calc_score_equivalence.py tests/test_before.py tests/test_after.py
+  
+  app:
+    build: .
+    volumes:
+      - .:/app
+    command: python evaluation/evaluation.py
