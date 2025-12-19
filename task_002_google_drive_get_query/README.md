@@ -150,7 +150,6 @@ evaluation/
 │       ├── report.md
 │       └── stdout.log
 ├── run_evaluation.py
-└── performance_benchmark.py
 ```
 
 ### Report Contents
