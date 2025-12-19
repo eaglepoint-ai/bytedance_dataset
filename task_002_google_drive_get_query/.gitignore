@@ -19,3 +19,7 @@ coverage.xml
 instance/
 *.pyc
 
+# Evaluation reports (keep scripts, ignore generated date folders)
+evaluation/*/
+!evaluation/run_evaluation.py
+!evaluation/performance_benchmark.py

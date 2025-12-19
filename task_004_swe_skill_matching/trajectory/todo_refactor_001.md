@@ -1,10 +1,21 @@
 # Trajectory (Thinking Process for Refactoring)
-1. I audited the original matcher. It loaded every employee with skills and availability into memory, scored everyone with nested loops, then sorted all matches. This guaranteed high fixed cost and poor scaling.
 
-2. I set a performance contract using the same tests. Warm-run latency must stay under budget, scaling must not blow up when requirements grow, and allocation volume must stay low when many employees qualify.
+1.  I audited the original code. It loaded full tables into memory for filtering and sorting, applied pagination too late, repeatedly recalculated deal values, and used N+1 queries. This design would not scale.
 
-3. I changed the flow to two phases. Phase 1 finds top candidates using minimal data. Phase 2 materializes full details only for the top results. This avoids building full entity graphs for 10,000 employees.
+2.  I defined a performance contract first. Filtering and ordering must stay in the database. Ordering must be stable. We would use keyset pagination, forbid N+1 patterns, and avoid per-request aggregations.
 
-4. I cut hot-path work per employee. I precomputed required-skill counts for fast lookups and replaced brute-force availability checks with sorted-interval scanning. This reduces comparisons as requirements increase.
+3.  I reworked the data model for efficiency. A new ContactMetrics table stores precomputed values like cached deal value and interaction count. The search path no longer joins the heavy deals or interactions tables.
 
-5. I removed the full sort. I kept only the top 20 while iterating, then sorted at most 20 items at the end. This lowers CPU and memory cost without changing the returned behavior.
+4.  I rebuilt the search as a projection-first pipeline. It now projects only needed fields into a lightweight shape, preventing EF from materializing large entity graphs.
+
+5.  All filters moved to SQL. City, date, deal stage, and minimum value became simple server-side predicates that work with indexes.
+
+6.  Tag filtering now uses an EXISTS subquery. This avoids eager loading and prevents cartesian explosions in the result set.
+
+7.  I implemented stable ordering and keyset pagination. Results order by last contact date, last name, first name, and ID. A cursor-based seek predicate makes deep paging fast without offset scans.
+
+8.  I eliminated N+1 queries for enrichment. The code fetches a page of contacts, then loads all their tags in one single follow-up query before mapping them in memory.
+
+9.  I added normalization for case-insensitive tag searches. A NormalizedName column on the Tag table, plus normalized request input, ensures consistent behavior.
+
+10. The solution is built around verifiable signals. It uses two queries per request, never touches the heavy tables during search, maintains stable ordering, and shows measurable performance gains.
