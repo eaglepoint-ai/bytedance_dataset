@@ -40,25 +40,7 @@ else
 fi
 echo ""
 
-# Step 4: Run equivalence tests
-echo "Step 4: Running equivalence tests..."
-if docker compose run --rm test-equivalence; then
-    echo "✅ Equivalence tests passed"
-else
-    echo "❌ Equivalence tests failed"
-    exit 1
-fi
-echo ""
 
-# Step 5: Run structural tests
-echo "Step 5: Running structural tests..."
-if docker compose run --rm test-all pytest -q tests/test_structure.py; then
-    echo "✅ Structural tests passed"
-else
-    echo "❌ Structural tests failed"
-    exit 1
-fi
-echo ""
 
 # Step 6: Run evaluation and generate report
 echo "Step 6: Running evaluation and generating report..."

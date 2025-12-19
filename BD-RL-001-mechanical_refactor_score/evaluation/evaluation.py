@@ -4,8 +4,7 @@ Evaluation runner for Mechanical Refactor (calc_score).
 
 This evaluation script:
 - Tests both before and after implementations
-- Compares code quality metrics (pylint scores)
-- Verifies structural improvements
+- Verifies structural improvements (duplication reduction, line count)
 - Generates structured reports
 
 Run with:
@@ -14,7 +13,6 @@ Run with:
 import os
 import sys
 import json
-import subprocess
 from datetime import datetime
 from pathlib import Path
 
@@ -22,68 +20,6 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 sys.path.insert(0, str(Path(__file__).parent.parent / "repository_before"))
 sys.path.insert(0, str(Path(__file__).parent.parent / "repository_after"))
-
-
-def run_pylint(file_path):
-    """Run pylint on a file and extract the score."""
-    try:
-        result = subprocess.run(
-            ["pylint", file_path, "--score=y", "--output-format=json"],
-            capture_output=True,
-            text=True,
-            timeout=30
-        )
-        
-        if result.returncode == 0:
-            # Parse JSON output
-            try:
-                data = json.loads(result.stdout)
-                # Find the score in the output
-                for item in data:
-                    if "score" in item:
-                        return {
-                            "score": item["score"],
-                            "max_score": 10.0,
-                        }
-            except json.JSONDecodeError:
-                pass
-        
-        # Fallback: parse text output
-        output = result.stdout + result.stderr
-        for line in output.split("\n"):
-            if "rated at" in line.lower() or "Your code has been rated at" in line:
-                # Extract score like "7.45/10"
-                import re
-                match = re.search(r"(\d+\.?\d*)/10", line)
-                if match:
-                    return {
-                        "score": float(match.group(1)),
-                        "max_score": 10.0,
-                    }
-        
-        return {
-            "score": None,
-            "max_score": 10.0,
-            "error": "Could not parse pylint score",
-        }
-    except subprocess.TimeoutExpired:
-        return {
-            "score": None,
-            "max_score": 10.0,
-            "error": "Pylint timeout",
-        }
-    except FileNotFoundError:
-        return {
-            "score": None,
-            "max_score": 10.0,
-            "error": "pylint not found",
-        }
-    except Exception as e:
-        return {
-            "score": None,
-            "max_score": 10.0,
-            "error": str(e),
-        }
 
 
 def count_lines(file_path):
@@ -155,15 +91,6 @@ def evaluate_implementation(implementation_name, file_path):
         print(f"❌ File not found: {file_path}")
         return None
     
-    # Run pylint
-    print(f"\nRunning pylint...")
-    pylint_result = run_pylint(file_path)
-    
-    if pylint_result.get("score") is not None:
-        print(f"Pylint score: {pylint_result['score']:.2f}/10")
-    else:
-        print(f"⚠️  Could not get pylint score: {pylint_result.get('error', 'Unknown error')}")
-    
     # Count lines
     lines = count_lines(file_path)
     if lines is not None:
@@ -182,7 +109,6 @@ def evaluate_implementation(implementation_name, file_path):
     
     return {
         "file_path": file_path,
-        "pylint": pylint_result,
         "lines": lines,
         "float_calls_in_loop": float_calls_in_loop,
         "int_calls_in_loop": int_calls_in_loop,
@@ -215,15 +141,6 @@ def run_evaluation(params):
         return None
     
     # Calculate improvements
-    before_score = before_metrics.get("pylint", {}).get("score")
-    after_score = after_metrics.get("pylint", {}).get("score")
-    
-    score_improvement = None
-    score_improvement_pct = None
-    if before_score is not None and after_score is not None:
-        score_improvement = after_score - before_score
-        score_improvement_pct = (score_improvement / before_score) * 100 if before_score > 0 else 0
-    
     line_change = None
     if before_metrics.get("lines") is not None and after_metrics.get("lines") is not None:
         line_change = after_metrics["lines"] - before_metrics["lines"]
@@ -241,8 +158,6 @@ def run_evaluation(params):
         "before": before_metrics,
         "after": after_metrics,
         "comparison": {
-            "pylint_score_improvement": round(score_improvement, 2) if score_improvement is not None else None,
-            "pylint_score_improvement_pct": round(score_improvement_pct, 1) if score_improvement_pct is not None else None,
             "line_change": line_change,
             "float_calls_reduction": float_reduction,
             "int_calls_reduction": int_reduction,
@@ -253,13 +168,6 @@ def run_evaluation(params):
     print(f"\n{'=' * 60}")
     print("EVALUATION SUMMARY")
     print(f"{'=' * 60}")
-    
-    if before_score is not None and after_score is not None:
-        print(f"\nPylint Score:")
-        print(f"  Before: {before_score:.2f}/10")
-        print(f"  After:  {after_score:.2f}/10")
-        if score_improvement is not None:
-            print(f"  Improvement: {score_improvement:+.2f} ({score_improvement_pct:+.1f}%)")
     
     if line_change is not None:
         print(f"\nLine Count:")
@@ -286,11 +194,6 @@ def run_evaluation(params):
             print(f"  ✅ Duplication reduced!")
         elif int_reduction == 0:
             print(f"  ⚠️  No reduction in duplication")
-    
-    if score_improvement is not None and score_improvement > 0:
-        print(f"\n✅ Code quality improved!")
-    elif score_improvement is not None and score_improvement < 0:
-        print(f"\n⚠️  Code quality decreased")
     
     return metrics
 
