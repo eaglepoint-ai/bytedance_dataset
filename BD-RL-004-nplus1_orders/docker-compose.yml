@@ -2,3 +2,9 @@ services:
   sut:
     build: .
     command: pytest -q /app/tests
+  
+  app:
+    build: .
+    volumes:
+      - .:/app
+    command: python evaluation/evaluation.py
