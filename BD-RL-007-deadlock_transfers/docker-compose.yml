@@ -1,0 +1,45 @@
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: app
+      POSTGRES_PASSWORD: app
+      POSTGRES_DB: appdb
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U app -d appdb"]
+      interval: 1s
+      timeout: 3s
+      retries: 30
+  
+  test-before:
+    build: .
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PYTHONPATH: /app/repository_before
+      DATABASE_URL: postgresql://app:app@db:5432/appdb
+    command: pytest -q /app/tests
+  
+  test-after:
+    build: .
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PYTHONPATH: /app/repository_after
+      DATABASE_URL: postgresql://app:app@db:5432/appdb
+    command: pytest -q /app/tests
+  
+  app:
+    build: .
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - .:/app
+    environment:
+      DATABASE_URL: postgresql://app:app@db:5432/appdb
+    command: python evaluation/evaluation.py
