@@ -1,4 +1,4 @@
-import React, { useState, useRef, useLayoutEffect } from "react";
+import { useState, useRef, useLayoutEffect } from "react";
 import { useSocket } from "./hooks/useSocket";
 import Backdrop from "./components/Backdrop";
 import TextArea from "./components/TextArea";

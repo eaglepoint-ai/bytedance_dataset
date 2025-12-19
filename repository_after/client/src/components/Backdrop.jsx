@@ -1,11 +1,10 @@
-import React from "react";
-
 const Backdrop = ({ content, remoteUsers }) => {
   const renderBackdrop = () => {
     let elements = [];
     let lastIndex = 0;
 
     const markers = [];
+
     Object.entries(remoteUsers).forEach(([, user]) => {
       markers.push({
         index: user.selectionEnd,
@@ -13,6 +12,7 @@ const Backdrop = ({ content, remoteUsers }) => {
         color: user.color,
         name: user.username,
       });
+
       if (user.selectionStart !== user.selectionEnd) {
         const min = Math.min(user.selectionStart, user.selectionEnd);
         const max = Math.max(user.selectionStart, user.selectionEnd);
@@ -84,6 +84,7 @@ const Backdrop = ({ content, remoteUsers }) => {
     });
 
     const remainder = content.slice(lastIndex);
+
     if (activeSelections.length > 0) {
       elements.push(
         <span key="rem" style={{ backgroundColor: activeSelections[0] + "44" }}>

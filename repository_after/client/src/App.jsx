@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import LiveEditor from "./LiveEditor.jsx";
 import "./App.css";
 
