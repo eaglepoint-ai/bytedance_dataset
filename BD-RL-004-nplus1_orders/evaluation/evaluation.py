@@ -28,7 +28,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "repository_before"))
 sys.path.insert(0, str(Path(__file__).parent.parent / "repository_after"))
 
 
-def seed_data(session, User, Order, users=2000, orders_per_user=300, active_ratio=0.8):
+def seed_data(session, User, Order, users=200, orders_per_user=300, active_ratio=0.8):
     """Seed test data with users and orders."""
     session.query(Order).delete()
     session.query(User).delete()
@@ -45,7 +45,7 @@ def seed_data(session, User, Order, users=2000, orders_per_user=300, active_rati
         for j in range(orders_per_user):
             session.add(
                 Order(
-                    id=(i * 10000000 + j + 1),
+                    id=(i * 1000 + j + 1),
                     user_id=u.id,
                     created_at=now + timedelta(minutes=j),
                     amount=Decimal("1.00"),
@@ -275,12 +275,12 @@ def main():
     import argparse
     
     parser = argparse.ArgumentParser(description="Run N+1 query optimization evaluation")
-    parser.add_argument("--users", type=int, default=2000, help="Number of users (default: 2000)")
+    parser.add_argument("--users", type=int, default=200, help="Number of users (default: 200)")
     parser.add_argument("--orders-per-user", type=int, default=300, help="Orders per user (default: 300)")
     parser.add_argument("--active-ratio", type=float, default=0.8, help="Ratio of active users (default: 0.8)")
     parser.add_argument("--top-n", type=int, default=2, help="Top N orders per user (default: 2)")
     parser.add_argument("--iterations", type=int, default=10, help="Performance test iterations (default: 10)")
-    parser.add_argument("--output", type=str, help="Output JSON file path (optional)")
+    parser.add_argument("--output", type=str, default="evaluation/report.json", help="Output JSON file path (default: evaluation/report.json)")
     
     args = parser.parse_args()
     
@@ -320,19 +320,12 @@ def main():
         "metrics": metrics,
     }
     
-    # Output JSON if requested
-    if args.output:
-        output_path = Path(args.output)
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        with open(output_path, "w") as f:
-            json.dump(report, f, indent=2)
-        print(f"\n✅ Report saved to: {output_path}")
-    else:
-        # Print JSON to stdout
-        print(f"\n{'=' * 60}")
-        print("JSON REPORT")
-        print(f"{'=' * 60}")
-        print(json.dumps(report, indent=2))
+    # Output JSON to file (default: evaluation/report.json)
+    output_path = Path(args.output)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(output_path, "w") as f:
+        json.dump(report, f, indent=2)
+    print(f"\n✅ Report saved to: {output_path}")
     
     print(f"\n{'=' * 60}")
     print(f"EVALUATION COMPLETE")

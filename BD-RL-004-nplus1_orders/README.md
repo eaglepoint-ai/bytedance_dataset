@@ -34,14 +34,6 @@ docker run --rm -e PYTHONPATH=/app/repository_before nplus1-orders
 docker run --rm -e PYTHONPATH=/app/repository_after nplus1-orders
 ```
 
----
-
-## Performance Benchmark
-
-```bash
-docker run --rm -e PYTHONPATH=/app/repository_before nplus1-orders python evaluation/performance_benchmark.py
-docker run --rm -e PYTHONPATH=/app/repository_after  nplus1-orders python evaluation/performance_benchmark.py
-```
 
 ---
 

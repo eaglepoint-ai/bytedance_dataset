@@ -1,0 +1,41 @@
+services:
+  client:
+    build:
+      context: ./repository_after/client
+      dockerfile: Dockerfile
+    ports:
+      - "5173:5173"
+    environment:
+      - VITE_SOCKET_URL=http://server:3000
+    networks:
+      - app-network
+
+  server:
+    build:
+      context: ./repository_after/server
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    networks:
+      - app-network
+
+  tests:
+    build:
+      context: ./tests
+      dockerfile: Dockerfile
+    volumes:
+      - ./evaluations:/app/evaluations
+      - ./repository_after/client:/app/client
+      - ./repository_after/server:/app/server
+    command: node /app/evaluations/run.js
+    networks:
+      - app-network
+    environment:
+      - SERVER_URL=http://server:3000
+    depends_on:
+      - server
+      - client
+
+networks:
+  app-network:
+    driver: bridge
