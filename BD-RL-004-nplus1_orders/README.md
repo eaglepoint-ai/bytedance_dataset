@@ -34,12 +34,16 @@ docker run --rm -e PYTHONPATH=/app/repository_before nplus1-orders
 docker run --rm -e PYTHONPATH=/app/repository_after nplus1-orders
 ```
 
+### Run evaluation (compares both implementations)
+```bash
+docker compose run --rm app python evaluation/evaluation.py
+```
 
----
-
-## Reports
-- pylint_score_before.txt / pylint_score_after.txt
-- radon_report_before.json / radon_report_after.json
+This will:
+- Evaluate both before and after implementations
+- Count SQL queries to verify N+1 is eliminated
+- Measure performance improvements
+- Generate `evaluation/report.json`
 
 ---
 

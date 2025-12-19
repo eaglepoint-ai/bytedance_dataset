@@ -1,7 +1,7 @@
 {
-  "started_at": "2025-12-19T15:54:19.299782",
-  "finished_at": "2025-12-19T15:55:05.185977",
-  "duration_seconds": 45.886195,
+  "started_at": "2025-12-19T14:02:02.227355",
+  "finished_at": "2025-12-19T14:02:34.621329",
+  "duration_seconds": 32.393974,
   "success": true,
   "error": null,
   "parameters": {
@@ -24,9 +24,9 @@
       "query_optimized": true,
       "performance": {
         "iterations": 10,
-        "total_time_seconds": 20.368676167,
-        "avg_time_seconds": 2.0368676167,
-        "avg_time_ms": 2036.8676166999999
+        "total_time_seconds": 14.79129567400014,
+        "avg_time_seconds": 1.479129567400014,
+        "avg_time_ms": 1479.129567400014
       }
     },
     "after": {
@@ -34,16 +34,16 @@
       "query_optimized": true,
       "performance": {
         "iterations": 10,
-        "total_time_seconds": 19.239750332999996,
-        "avg_time_seconds": 1.9239750332999996,
-        "avg_time_ms": 1923.9750332999997
+        "total_time_seconds": 12.806126756000594,
+        "avg_time_seconds": 1.2806126756000595,
+        "avg_time_ms": 1280.6126756000594
       }
     },
     "comparison": {
       "query_count_reduction": 159,
       "query_count_reduction_pct": 98.75776397515527,
-      "speedup": 1.06,
-      "improvement_pct": 5.5
+      "speedup": 1.16,
+      "improvement_pct": 13.4
     }
   }
 }
