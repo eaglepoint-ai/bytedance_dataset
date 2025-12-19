@@ -1,5 +1,5 @@
-import { useEffect, useRef } from "react";
-import { socket } from "./socket";
+import { useEffect } from "react";
+import { socket } from "../services/socket";
 
 export const useSocket = (
   roomId,
