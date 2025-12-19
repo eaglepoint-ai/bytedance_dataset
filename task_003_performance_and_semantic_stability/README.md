@@ -30,9 +30,8 @@ The `format_ids` function has a critical performance bottleneck:
 - `tests/test_optimization_quality.py` - 3 optimization validation tests (all FAIL_TO_PASS)
 
 ### Evaluation & Metrics
-- `evaluation/compare_metrics.py` - Automated metric comparison
-- `evaluation/pylint_score_*.txt` - Code quality scores
-- `evaluation/radon_report_*.json` - Complexity metrics
+- `evaluation/evaluate.py` - Comprehensive evaluation script
+- `evaluation/YYYY-MM-DD/HH-MM-SS/report.json` - Generated evaluation reports
 
 ### Documentation
 - `instances/task_003.json` - Task specification and requirements
@@ -41,7 +40,7 @@ The `format_ids` function has a critical performance bottleneck:
 
 ### Infrastructure
 - `Dockerfile` - Test environment with pylint, radon, pytest-benchmark
-- `docker-compose.yml` - Test orchestration (4 services)
+- `docker-compose.yml` - Single service orchestration
 - `requirements.txt` - Python dependencies
 
 ## Quick Start
@@ -61,14 +60,20 @@ pytest tests/test_performance_improvement.py -v
 
 ### Run with Docker Compose (Recommended)
 ```bash
-# Run all tests and compare metrics
-docker-compose up test-before test-after generate-metrics compare-metrics
+# Run evaluation (tests + metrics + comparison)
+docker compose run --rm app python evaluation/evaluate.py
 
-# Just run tests
-docker-compose up test-before test-after
+# Run tests for 'before' version only
+docker compose run --rm -e PYTHONPATH=/app/repository_before app python evaluation/evaluate.py --test-type behavior_preservation
 
-# Just generate and compare metrics
-docker-compose up generate-metrics compare-metrics
+# Run tests for 'after' version only
+docker compose run --rm -e PYTHONPATH=/app/repository_after app python evaluation/evaluate.py --test-type behavior_preservation
+
+# Run specific test category
+docker compose run --rm -e PYTHONPATH=/app/repository_after app python evaluation/evaluate.py --test-type performance_improvement
+
+# Generate evaluation report with parameters
+docker compose run --rm app python evaluation/evaluate.py --param version=1.0 --param environment=production
 ```
 
 ### Run Individual Containers
@@ -81,6 +86,41 @@ docker run --rm -e PYTHONPATH=/app/repository_before format-ids
 
 # Test after version
 docker run --rm -e PYTHONPATH=/app/repository_after format-ids
+```
+
+## Evaluation Reports
+
+The `evaluation/evaluate.py` script generates comprehensive reports in JSON format at `evaluation/YYYY-MM-DD/HH-MM-SS/report.json`. Each report contains:
+
+- **`run_id`**: Unique identifier for the evaluation run
+- **`started_at`** / **`finished_at`**: Timestamps with duration
+- **`parameters`**: Custom parameters passed to the evaluation
+- **`environment`**: System information (Python version, platform, etc.)
+- **`metrics`**: Code quality metrics (pylint scores, complexity, LOC)
+- **`before`** / **`after`**: Test results and metrics for each version
+- **`comparison`**: Detailed comparison between before/after versions
+
+### Example Report Structure
+```json
+{
+  "run_id": "95d1a51c-4129-48f7-aef7-2240c0a71d9c",
+  "started_at": "2025-12-19T16:13:10.628048",
+  "finished_at": "2025-12-19T16:13:10.678757",
+  "duration_seconds": 0.050709,
+  "parameters": {"version": "1.0"},
+  "environment": {...},
+  "metrics": {
+    "before": {"lines_of_code": 14, "has_precompiled_regex": false},
+    "after": {"lines_of_code": 27, "has_precompiled_regex": true}
+  },
+  "before": {"tests": {...}, "metrics": {...}},
+  "after": {"tests": {...}, "metrics": {...}},
+  "comparison": {
+    "test_improvements": {...},
+    "metric_improvements": {...},
+    "summary": {...}
+  }
+}
 ```
 
 ## Expected Results
