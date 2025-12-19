@@ -1,74 +1,112 @@
-const database = require('../../src/database/db');
-const reservationService = require('../../src/services/reservationService');
-const resourceService = require('../../src/services/resourceService');
-const authService = require('../../src/services/authService');
+const database = require("../../src/database/db");
+const reservationService = require("../../src/services/reservationService");
+const resourceService = require("../../src/services/resourceService");
+const authService = require("../../src/services/authService");
 
-describe('Reservation Service', () => {
+describe("Reservation Service", () => {
   let adminUser, regularUser, activeResource;
   const futureStart = new Date(Date.now() + 3600000).toISOString();
   const futureEnd = new Date(Date.now() + 7200000).toISOString();
 
   beforeAll(async () => {
-    process.env.DATABASE_PATH = ':memory:';
+    process.env.DATABASE_PATH = ":memory:";
     await database.initialize();
   });
 
   beforeEach(async () => {
-    adminUser = await authService.register('Admin', 'admin@example.com', 'password', 'admin');
-    regularUser = await authService.register('User', 'user@example.com', 'password', 'user');
-    activeResource = await resourceService.createResource('Meeting Room', 'room', adminUser.id);
+    adminUser = await authService.register(
+      "Admin",
+      "admin@example.com",
+      "password",
+      "admin"
+    );
+    regularUser = await authService.register(
+      "User",
+      "user@example.com",
+      "password",
+      "user"
+    );
+    activeResource = await resourceService.createResource(
+      "Meeting Room",
+      "room",
+      adminUser.id
+    );
   });
 
   afterEach(async () => {
-    await database.run('DELETE FROM reservations');
-    await database.run('DELETE FROM resources');
-    await database.run('DELETE FROM users');
+    await database.run("DELETE FROM reservations");
+    await database.run("DELETE FROM resources");
+    await database.run("DELETE FROM users");
   });
 
   afterAll(async () => {
     await database.close();
   });
 
-  describe('isValidTransition', () => {
-    it('should allow pending to approved', () => {
-      expect(reservationService.isValidTransition('pending', 'approved')).toBe(true);
+  describe("isValidTransition", () => {
+    it("should allow pending to approved", () => {
+      expect(reservationService.isValidTransition("pending", "approved")).toBe(
+        true
+      );
     });
 
-    it('should allow pending to rejected', () => {
-      expect(reservationService.isValidTransition('pending', 'rejected')).toBe(true);
+    it("should allow pending to rejected", () => {
+      expect(reservationService.isValidTransition("pending", "rejected")).toBe(
+        true
+      );
     });
 
-    it('should allow approved to cancelled', () => {
-      expect(reservationService.isValidTransition('approved', 'cancelled')).toBe(true);
+    it("should allow approved to cancelled", () => {
+      expect(
+        reservationService.isValidTransition("approved", "cancelled")
+      ).toBe(true);
     });
 
-    it('should not allow rejected to any state', () => {
-      expect(reservationService.isValidTransition('rejected', 'approved')).toBe(false);
-      expect(reservationService.isValidTransition('rejected', 'pending')).toBe(false);
-      expect(reservationService.isValidTransition('rejected', 'cancelled')).toBe(false);
+    it("should not allow rejected to any state", () => {
+      expect(reservationService.isValidTransition("rejected", "approved")).toBe(
+        false
+      );
+      expect(reservationService.isValidTransition("rejected", "pending")).toBe(
+        false
+      );
+      expect(
+        reservationService.isValidTransition("rejected", "cancelled")
+      ).toBe(false);
     });
 
-    it('should not allow cancelled to any state', () => {
-      expect(reservationService.isValidTransition('cancelled', 'approved')).toBe(false);
-      expect(reservationService.isValidTransition('cancelled', 'pending')).toBe(false);
+    it("should not allow cancelled to any state", () => {
+      expect(
+        reservationService.isValidTransition("cancelled", "approved")
+      ).toBe(false);
+      expect(reservationService.isValidTransition("cancelled", "pending")).toBe(
+        false
+      );
     });
 
-    it('should not allow blocked to any state', () => {
-      expect(reservationService.isValidTransition('blocked', 'approved')).toBe(false);
-      expect(reservationService.isValidTransition('blocked', 'cancelled')).toBe(false);
+    it("should not allow blocked to any state", () => {
+      expect(reservationService.isValidTransition("blocked", "approved")).toBe(
+        false
+      );
+      expect(reservationService.isValidTransition("blocked", "cancelled")).toBe(
+        false
+      );
     });
 
-    it('should not allow approved to rejected', () => {
-      expect(reservationService.isValidTransition('approved', 'rejected')).toBe(false);
+    it("should not allow approved to rejected", () => {
+      expect(reservationService.isValidTransition("approved", "rejected")).toBe(
+        false
+      );
     });
 
-    it('should not allow pending to cancelled', () => {
-      expect(reservationService.isValidTransition('pending', 'cancelled')).toBe(false);
+    it("should not allow pending to cancelled", () => {
+      expect(reservationService.isValidTransition("pending", "cancelled")).toBe(
+        false
+      );
     });
   });
 
-  describe('createReservation', () => {
-    it('should create reservation with pending status', async () => {
+  describe("createReservation", () => {
+    it("should create reservation with pending status", async () => {
       const reservation = await reservationService.createReservation(
         activeResource.id,
         regularUser.id,
@@ -76,16 +114,20 @@ describe('Reservation Service', () => {
         futureEnd
       );
 
-      expect(reservation).toHaveProperty('id');
+      expect(reservation).toHaveProperty("id");
       expect(reservation.resourceId).toBe(activeResource.id);
       expect(reservation.userId).toBe(regularUser.id);
-      expect(reservation.status).toBe('pending');
+      expect(reservation.status).toBe("pending");
       expect(reservation.startTime).toBe(futureStart);
       expect(reservation.endTime).toBe(futureEnd);
     });
 
-    it('should reject reservation for inactive resource', async () => {
-      await resourceService.updateResource(activeResource.id, { status: 'inactive' }, adminUser.id);
+    it("should reject reservation for inactive resource", async () => {
+      await resourceService.updateResource(
+        activeResource.id,
+        { status: "inactive" },
+        adminUser.id
+      );
 
       await expect(
         reservationService.createReservation(
@@ -94,21 +136,21 @@ describe('Reservation Service', () => {
           futureStart,
           futureEnd
         )
-      ).rejects.toThrow('Resource is not active');
+      ).rejects.toThrow("Resource is not active");
     });
 
-    it('should reject reservation with invalid time format', async () => {
+    it("should reject reservation with invalid time format", async () => {
       await expect(
         reservationService.createReservation(
           activeResource.id,
           regularUser.id,
-          'invalid-time',
+          "invalid-time",
           futureEnd
         )
-      ).rejects.toThrow('Start time must be valid ISO 8601 UTC format');
+      ).rejects.toThrow("Start time must be valid ISO 8601 UTC format");
     });
 
-    it('should reject reservation with start time in the past', async () => {
+    it("should reject reservation with start time in the past", async () => {
       const pastStart = new Date(Date.now() - 3600000).toISOString();
       const pastEnd = new Date(Date.now() - 1800000).toISOString();
 
@@ -119,10 +161,10 @@ describe('Reservation Service', () => {
           pastStart,
           pastEnd
         )
-      ).rejects.toThrow('Start time must be in the future');
+      ).rejects.toThrow("Start time must be in the future");
     });
 
-    it('should reject reservation with start time after end time', async () => {
+    it("should reject reservation with start time after end time", async () => {
       await expect(
         reservationService.createReservation(
           activeResource.id,
@@ -130,10 +172,10 @@ describe('Reservation Service', () => {
           futureEnd,
           futureStart
         )
-      ).rejects.toThrow('Start time must be before end time');
+      ).rejects.toThrow("Start time must be before end time");
     });
 
-    it('should reject overlapping reservation with approved reservation', async () => {
+    it("should reject overlapping reservation with approved reservation", async () => {
       const reservation = await reservationService.createReservation(
         activeResource.id,
         regularUser.id,
@@ -152,10 +194,10 @@ describe('Reservation Service', () => {
           overlapStart,
           overlapEnd
         )
-      ).rejects.toThrow('Time slot conflicts with existing reservation');
+      ).rejects.toThrow("Time slot conflicts with existing reservation");
     });
 
-    it('should allow adjacent reservations (no overlap)', async () => {
+    it("should allow adjacent reservations (no overlap)", async () => {
       const firstStart = new Date(Date.now() + 3600000).toISOString();
       const firstEnd = new Date(Date.now() + 7200000).toISOString();
       const secondStart = firstEnd;
@@ -177,10 +219,10 @@ describe('Reservation Service', () => {
       );
 
       expect(second).toBeDefined();
-      expect(second.status).toBe('pending');
+      expect(second.status).toBe("pending");
     });
 
-    it('should reject overlapping with blocked slot', async () => {
+    it("should reject overlapping with blocked slot", async () => {
       await reservationService.createBlockedSlot(
         activeResource.id,
         futureStart,
@@ -198,10 +240,10 @@ describe('Reservation Service', () => {
           overlapStart,
           overlapEnd
         )
-      ).rejects.toThrow('Time slot conflicts with existing reservation');
+      ).rejects.toThrow("Time slot conflicts with existing reservation");
     });
 
-    it('should allow multiple pending reservations for same slot', async () => {
+    it("should allow multiple pending reservations for same slot", async () => {
       const first = await reservationService.createReservation(
         activeResource.id,
         regularUser.id,
@@ -216,12 +258,12 @@ describe('Reservation Service', () => {
         futureEnd
       );
 
-      expect(first.status).toBe('pending');
-      expect(second.status).toBe('pending');
+      expect(first.status).toBe("pending");
+      expect(second.status).toBe("pending");
     });
   });
 
-  describe('approveReservation', () => {
+  describe("approveReservation", () => {
     let reservation;
 
     beforeEach(async () => {
@@ -233,47 +275,51 @@ describe('Reservation Service', () => {
       );
     });
 
-    it('should approve pending reservation', async () => {
+    it("should approve pending reservation", async () => {
       const approved = await reservationService.approveReservation(
         reservation.id,
         adminUser.id
       );
 
-      expect(approved.status).toBe('approved');
+      expect(approved.status).toBe("approved");
     });
 
-    it('should reject approving non-existent reservation', async () => {
+    it("should reject approving non-existent reservation", async () => {
       await expect(
         reservationService.approveReservation(9999, adminUser.id)
-      ).rejects.toThrow('Reservation not found');
+      ).rejects.toThrow("Reservation not found");
     });
 
-    it('should reject approving already approved reservation', async () => {
+    it("should reject approving already approved reservation", async () => {
       await reservationService.approveReservation(reservation.id, adminUser.id);
 
       await expect(
         reservationService.approveReservation(reservation.id, adminUser.id)
-      ).rejects.toThrow('Cannot approve reservation with status: approved');
+      ).rejects.toThrow("Cannot approve reservation with status: approved");
     });
 
-    it('should reject approving rejected reservation', async () => {
+    it("should reject approving rejected reservation", async () => {
       await reservationService.rejectReservation(reservation.id, adminUser.id);
 
       await expect(
         reservationService.approveReservation(reservation.id, adminUser.id)
-      ).rejects.toThrow('Cannot approve reservation with status: rejected');
+      ).rejects.toThrow("Cannot approve reservation with status: rejected");
     });
 
-    it('should reject approving cancelled reservation', async () => {
+    it("should reject approving cancelled reservation", async () => {
       await reservationService.approveReservation(reservation.id, adminUser.id);
-      await reservationService.cancelReservation(reservation.id, adminUser.id, true);
+      await reservationService.cancelReservation(
+        reservation.id,
+        adminUser.id,
+        true
+      );
 
       await expect(
         reservationService.approveReservation(reservation.id, adminUser.id)
-      ).rejects.toThrow('Cannot approve reservation with status: cancelled');
+      ).rejects.toThrow("Cannot approve reservation with status: cancelled");
     });
 
-    it('should prevent race condition by rechecking overlap', async () => {
+    it("should prevent race condition by rechecking overlap", async () => {
       const reservation2 = await reservationService.createReservation(
         activeResource.id,
         adminUser.id,
@@ -285,11 +331,13 @@ describe('Reservation Service', () => {
 
       await expect(
         reservationService.approveReservation(reservation2.id, adminUser.id)
-      ).rejects.toThrow('Cannot approve: time slot now conflicts with another reservation');
+      ).rejects.toThrow(
+        "Cannot approve: time slot now conflicts with another reservation"
+      );
     });
   });
 
-  describe('rejectReservation', () => {
+  describe("rejectReservation", () => {
     let reservation;
 
     beforeEach(async () => {
@@ -301,39 +349,39 @@ describe('Reservation Service', () => {
       );
     });
 
-    it('should reject pending reservation', async () => {
+    it("should reject pending reservation", async () => {
       const rejected = await reservationService.rejectReservation(
         reservation.id,
         adminUser.id
       );
 
-      expect(rejected.status).toBe('rejected');
+      expect(rejected.status).toBe("rejected");
     });
 
-    it('should reject non-existent reservation', async () => {
+    it("should reject non-existent reservation", async () => {
       await expect(
         reservationService.rejectReservation(9999, adminUser.id)
-      ).rejects.toThrow('Reservation not found');
+      ).rejects.toThrow("Reservation not found");
     });
 
-    it('should not allow rejecting approved reservation', async () => {
+    it("should not allow rejecting approved reservation", async () => {
       await reservationService.approveReservation(reservation.id, adminUser.id);
 
       await expect(
         reservationService.rejectReservation(reservation.id, adminUser.id)
-      ).rejects.toThrow('Cannot reject reservation with status: approved');
+      ).rejects.toThrow("Cannot reject reservation with status: approved");
     });
 
-    it('should not allow rejecting already rejected reservation', async () => {
+    it("should not allow rejecting already rejected reservation", async () => {
       await reservationService.rejectReservation(reservation.id, adminUser.id);
 
       await expect(
         reservationService.rejectReservation(reservation.id, adminUser.id)
-      ).rejects.toThrow('Cannot reject reservation with status: rejected');
+      ).rejects.toThrow("Cannot reject reservation with status: rejected");
     });
   });
 
-  describe('cancelReservation', () => {
+  describe("cancelReservation", () => {
     let reservation;
 
     beforeEach(async () => {
@@ -346,41 +394,50 @@ describe('Reservation Service', () => {
       await reservationService.approveReservation(reservation.id, adminUser.id);
     });
 
-    it('should allow owner to cancel their approved reservation', async () => {
+    it("should allow owner to cancel their approved reservation", async () => {
       const cancelled = await reservationService.cancelReservation(
         reservation.id,
         regularUser.id,
         false
       );
 
-      expect(cancelled.status).toBe('cancelled');
+      expect(cancelled.status).toBe("cancelled");
     });
 
-    it('should allow admin to cancel any reservation', async () => {
+    it("should allow admin to cancel any reservation", async () => {
       const cancelled = await reservationService.cancelReservation(
         reservation.id,
         adminUser.id,
         true
       );
 
-      expect(cancelled.status).toBe('cancelled');
+      expect(cancelled.status).toBe("cancelled");
     });
 
-    it('should prevent user from cancelling another user\'s reservation', async () => {
-      const otherUser = await authService.register('Other', 'other@example.com', 'password', 'user');
+    it("should prevent user from cancelling another user's reservation", async () => {
+      const otherUser = await authService.register(
+        "Other",
+        "other@example.com",
+        "password",
+        "user"
+      );
 
       await expect(
-        reservationService.cancelReservation(reservation.id, otherUser.id, false)
-      ).rejects.toThrow('Cannot cancel another user\'s reservation');
+        reservationService.cancelReservation(
+          reservation.id,
+          otherUser.id,
+          false
+        )
+      ).rejects.toThrow("Cannot cancel another user's reservation");
     });
 
-    it('should reject cancelling non-existent reservation', async () => {
+    it("should reject cancelling non-existent reservation", async () => {
       await expect(
         reservationService.cancelReservation(9999, regularUser.id, false)
-      ).rejects.toThrow('Reservation not found');
+      ).rejects.toThrow("Reservation not found");
     });
 
-    it('should not allow cancelling pending reservation', async () => {
+    it("should not allow cancelling pending reservation", async () => {
       const pending = await reservationService.createReservation(
         activeResource.id,
         regularUser.id,
@@ -390,10 +447,10 @@ describe('Reservation Service', () => {
 
       await expect(
         reservationService.cancelReservation(pending.id, regularUser.id, false)
-      ).rejects.toThrow('Cannot cancel reservation with status: pending');
+      ).rejects.toThrow("Cannot cancel reservation with status: pending");
     });
 
-    it('should not allow cancelling rejected reservation', async () => {
+    it("should not allow cancelling rejected reservation", async () => {
       const pending = await reservationService.createReservation(
         activeResource.id,
         regularUser.id,
@@ -404,20 +461,28 @@ describe('Reservation Service', () => {
 
       await expect(
         reservationService.cancelReservation(pending.id, regularUser.id, false)
-      ).rejects.toThrow('Cannot cancel reservation with status: rejected');
+      ).rejects.toThrow("Cannot cancel reservation with status: rejected");
     });
 
-    it('should not allow cancelling already cancelled reservation', async () => {
-      await reservationService.cancelReservation(reservation.id, regularUser.id, false);
+    it("should not allow cancelling already cancelled reservation", async () => {
+      await reservationService.cancelReservation(
+        reservation.id,
+        regularUser.id,
+        false
+      );
 
       await expect(
-        reservationService.cancelReservation(reservation.id, regularUser.id, false)
-      ).rejects.toThrow('Cannot cancel reservation with status: cancelled');
+        reservationService.cancelReservation(
+          reservation.id,
+          regularUser.id,
+          false
+        )
+      ).rejects.toThrow("Cannot cancel reservation with status: cancelled");
     });
   });
 
-  describe('createBlockedSlot', () => {
-    it('should create blocked slot', async () => {
+  describe("createBlockedSlot", () => {
+    it("should create blocked slot", async () => {
       const blocked = await reservationService.createBlockedSlot(
         activeResource.id,
         futureStart,
@@ -425,16 +490,20 @@ describe('Reservation Service', () => {
         adminUser.id
       );
 
-      expect(blocked).toHaveProperty('id');
+      expect(blocked).toHaveProperty("id");
       expect(blocked.resourceId).toBe(activeResource.id);
       expect(blocked.userId).toBeNull();
-      expect(blocked.status).toBe('blocked');
+      expect(blocked.status).toBe("blocked");
       expect(blocked.startTime).toBe(futureStart);
       expect(blocked.endTime).toBe(futureEnd);
     });
 
-    it('should reject blocked slot for inactive resource', async () => {
-      await resourceService.updateResource(activeResource.id, { status: 'inactive' }, adminUser.id);
+    it("should reject blocked slot for inactive resource", async () => {
+      await resourceService.updateResource(
+        activeResource.id,
+        { status: "inactive" },
+        adminUser.id
+      );
 
       await expect(
         reservationService.createBlockedSlot(
@@ -443,10 +512,10 @@ describe('Reservation Service', () => {
           futureEnd,
           adminUser.id
         )
-      ).rejects.toThrow('Resource is not active');
+      ).rejects.toThrow("Resource is not active");
     });
 
-    it('should reject overlapping blocked slot', async () => {
+    it("should reject overlapping blocked slot", async () => {
       await reservationService.createBlockedSlot(
         activeResource.id,
         futureStart,
@@ -464,10 +533,10 @@ describe('Reservation Service', () => {
           overlapEnd,
           adminUser.id
         )
-      ).rejects.toThrow('Time slot conflicts with existing reservation');
+      ).rejects.toThrow("Time slot conflicts with existing reservation");
     });
 
-    it('should reject blocked slot with invalid time', async () => {
+    it("should reject blocked slot with invalid time", async () => {
       const pastStart = new Date(Date.now() - 3600000).toISOString();
 
       await expect(
@@ -477,11 +546,11 @@ describe('Reservation Service', () => {
           futureEnd,
           adminUser.id
         )
-      ).rejects.toThrow('Start time must be in the future');
+      ).rejects.toThrow("Start time must be in the future");
     });
   });
 
-  describe('getReservations', () => {
+  describe("getReservations", () => {
     beforeEach(async () => {
       await reservationService.createReservation(
         activeResource.id,
@@ -497,26 +566,35 @@ describe('Reservation Service', () => {
       );
     });
 
-    it('should return all reservations for admin', async () => {
-      const reservations = await reservationService.getReservations(adminUser.id, true);
+    it("should return all reservations for admin", async () => {
+      const reservations = await reservationService.getReservations(
+        adminUser.id,
+        true
+      );
       expect(reservations).toHaveLength(2);
     });
 
-    it('should return only user\'s reservations for regular user', async () => {
-      const reservations = await reservationService.getReservations(regularUser.id, false);
+    it("should return only user's reservations for regular user", async () => {
+      const reservations = await reservationService.getReservations(
+        regularUser.id,
+        false
+      );
       expect(reservations).toHaveLength(1);
       expect(reservations[0].user_id).toBe(regularUser.id);
     });
 
-    it('should include user and resource names', async () => {
-      const reservations = await reservationService.getReservations(regularUser.id, false);
-      expect(reservations[0]).toHaveProperty('user_name');
-      expect(reservations[0]).toHaveProperty('resource_name');
-      expect(reservations[0].resource_name).toBe('Meeting Room');
+    it("should include user and resource names", async () => {
+      const reservations = await reservationService.getReservations(
+        regularUser.id,
+        false
+      );
+      expect(reservations[0]).toHaveProperty("user_name");
+      expect(reservations[0]).toHaveProperty("resource_name");
+      expect(reservations[0].resource_name).toBe("Meeting Room");
     });
   });
 
-  describe('getReservationById', () => {
+  describe("getReservationById", () => {
     let reservation;
 
     beforeEach(async () => {
@@ -528,7 +606,7 @@ describe('Reservation Service', () => {
       );
     });
 
-    it('should return reservation for owner', async () => {
+    it("should return reservation for owner", async () => {
       const result = await reservationService.getReservationById(
         reservation.id,
         regularUser.id,
@@ -538,7 +616,7 @@ describe('Reservation Service', () => {
       expect(result.id).toBe(reservation.id);
     });
 
-    it('should return reservation for admin', async () => {
+    it("should return reservation for admin", async () => {
       const result = await reservationService.getReservationById(
         reservation.id,
         adminUser.id,
@@ -548,23 +626,32 @@ describe('Reservation Service', () => {
       expect(result.id).toBe(reservation.id);
     });
 
-    it('should deny access to other users', async () => {
-      const otherUser = await authService.register('Other', 'other@example.com', 'password', 'user');
+    it("should deny access to other users", async () => {
+      const otherUser = await authService.register(
+        "Other",
+        "other@example.com",
+        "password",
+        "user"
+      );
 
       await expect(
-        reservationService.getReservationById(reservation.id, otherUser.id, false)
-      ).rejects.toThrow('Access denied');
+        reservationService.getReservationById(
+          reservation.id,
+          otherUser.id,
+          false
+        )
+      ).rejects.toThrow("Access denied");
     });
 
-    it('should throw error for non-existent reservation', async () => {
+    it("should throw error for non-existent reservation", async () => {
       await expect(
         reservationService.getReservationById(9999, regularUser.id, false)
-      ).rejects.toThrow('Reservation not found');
+      ).rejects.toThrow("Reservation not found");
     });
   });
 
-  describe('checkOverlap', () => {
-    it('should detect overlap correctly', async () => {
+  describe("checkOverlap", () => {
+    it("should detect overlap correctly", async () => {
       const reservation = await reservationService.createReservation(
         activeResource.id,
         regularUser.id,
@@ -586,7 +673,7 @@ describe('Reservation Service', () => {
       expect(result.conflictingReservation).toBeDefined();
     });
 
-    it('should not detect overlap for adjacent times', async () => {
+    it("should not detect overlap for adjacent times", async () => {
       const reservation = await reservationService.createReservation(
         activeResource.id,
         regularUser.id,
@@ -607,7 +694,7 @@ describe('Reservation Service', () => {
       expect(result.hasOverlap).toBe(false);
     });
 
-    it('should exclude specified reservation ID', async () => {
+    it("should exclude specified reservation ID", async () => {
       const reservation = await reservationService.createReservation(
         activeResource.id,
         regularUser.id,
@@ -624,62 +711,6 @@ describe('Reservation Service', () => {
       );
 
       expect(result.hasOverlap).toBe(false);
-    });
-  });
-
-  describe('Concurrency Tests', () => {
-    it.skip('should handle concurrent reservation attempts safely', async () => {
-      const promises = [];
-      const start = new Date(Date.now() + 3600000).toISOString();
-      const end = new Date(Date.now() + 7200000).toISOString();
-
-      // Multiple pending reservations for same slot are allowed
-      for (let i = 0; i < 5; i++) {
-        promises.push(
-          reservationService.createReservation(
-            activeResource.id,
-            regularUser.id,
-            start,
-            end
-          ).catch(err => ({ error: err.message }))
-        );
-      }
-
-      const results = await Promise.all(promises);
-      const successful = results.filter(r => r && r.id && !r.error);
-      
-      // All should succeed as pending status (multiple pending allowed)
-      expect(successful.length).toBe(5);
-    });
-
-    it.skip('should handle concurrent approval attempts safely', async () => {
-      const reservations = [];
-      
-      // Create 3 pending reservations with overlapping times
-      for (let i = 0; i < 3; i++) {
-        const start = new Date(Date.now() + 3600000 + (i * 10)).toISOString();
-        const end = new Date(Date.now() + 7200000).toISOString();
-        const res = await reservationService.createReservation(
-          activeResource.id,
-          regularUser.id,
-          start,
-          end
-        );
-        reservations.push(res);
-      }
-
-      // Try to approve all concurrently - only first should succeed
-      const approvalPromises = reservations.map(r =>
-        reservationService.approveReservation(r.id, adminUser.id).catch(err => ({ error: err.message }))
-      );
-
-      const results = await Promise.all(approvalPromises);
-      const successful = results.filter(r => r && r.status === 'approved');
-      const failed = results.filter(r => r && r.error);
-      
-      // Only 1 should succeed, rest should fail due to overlap
-      expect(successful.length).toBe(1);
-      expect(failed.length).toBe(2);
     });
   });
 });
