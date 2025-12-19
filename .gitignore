@@ -84,3 +84,5 @@ temp/
 .Trashes
 ehthumbs.db
 
+
+**/report.json
