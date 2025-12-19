@@ -1,0 +1,183 @@
+{
+  "instance_id": "task_004_resource_reservation_system",
+  "task_description": "Design and implement a full-stack web application that allows an organization to manage shared resources (meeting rooms, equipment, vehicles, etc.) with a reservation system. The application must support multiple users with role-based access control, handle concurrent reservations safely, and provide both REST API and user interface.",
+  "required_features": [
+    "User authentication and authorization (JWT-based)",
+    "Role-based access control (Admin and User roles)",
+    "Resource management (CRUD operations)",
+    "Time-based reservation system",
+    "Reservation approval workflow with state machine",
+    "Concurrency-safe reservation approval",
+    "Blocked time slots for maintenance",
+    "UTC timezone handling",
+    "RESTful API",
+    "React-based user interface",
+    "100% test coverage on backend and frontend"
+  ],
+  "technical_requirements": {
+    "backend": {
+      "framework": "Node.js with Express",
+      "database": "SQLite with transaction support",
+      "authentication": "JWT with bcrypt",
+      "test_framework": "Jest",
+      "test_coverage": "100%"
+    },
+    "frontend": {
+      "framework": "React 18 with Vite",
+      "routing": "React Router v6",
+      "state_management": "Context API",
+      "http_client": "Axios",
+      "test_framework": "Vitest with React Testing Library",
+      "test_coverage": "100%"
+    },
+    "deployment": {
+      "containerization": "Docker",
+      "orchestration": "Docker Compose",
+      "web_server": "Nginx for frontend"
+    }
+  },
+  "state_machine": {
+    "states": ["pending", "approved", "rejected", "cancelled", "completed", "blocked"],
+    "transitions": {
+      "pending": ["approved", "rejected", "cancelled"],
+      "approved": ["cancelled", "completed"],
+      "rejected": [],
+      "cancelled": [],
+      "completed": [],
+      "blocked": ["cancelled"]
+    }
+  },
+  "database_schema": {
+    "tables": {
+      "users": {
+        "columns": ["id", "name", "email", "password_hash", "role", "created_at"],
+        "constraints": ["PRIMARY KEY(id)", "UNIQUE(email)", "CHECK(role IN ('user', 'admin'))"]
+      },
+      "resources": {
+        "columns": ["id", "name", "type", "location", "capacity", "description", "is_active", "created_at"],
+        "constraints": ["PRIMARY KEY(id)", "CHECK(type IN ('meeting_room', 'equipment', 'vehicle', 'other'))"]
+      },
+      "reservations": {
+        "columns": ["id", "resource_id", "user_id", "start_time", "end_time", "status", "purpose", "created_at"],
+        "constraints": ["PRIMARY KEY(id)", "FOREIGN KEY(resource_id) REFERENCES resources(id)", "FOREIGN KEY(user_id) REFERENCES users(id)", "CHECK(status IN ('pending', 'approved', 'rejected', 'cancelled', 'completed', 'blocked'))"]
+      }
+    }
+  },
+  "api_endpoints": {
+    "auth": [
+      "POST /api/auth/register - Register new user",
+      "POST /api/auth/login - Login user",
+      "GET /api/auth/me - Get current user"
+    ],
+    "resources": [
+      "GET /api/resources - List all resources",
+      "GET /api/resources/:id - Get resource by ID",
+      "POST /api/resources - Create resource (admin only)",
+      "PUT /api/resources/:id - Update resource (admin only)"
+    ],
+    "reservations": [
+      "GET /api/reservations - List reservations",
+      "GET /api/reservations/:id - Get reservation by ID",
+      "POST /api/reservations - Create reservation",
+      "POST /api/reservations/:id/approve - Approve reservation (admin only)",
+      "POST /api/reservations/:id/reject - Reject reservation (admin only)",
+      "POST /api/reservations/:id/cancel - Cancel reservation",
+      "POST /api/reservations/blocked - Create blocked slot (admin only)"
+    ]
+  },
+  "test_requirements": {
+    "backend_tests": {
+      "unit_tests": [
+        "Time utility functions (38 tests)",
+        "Authentication service (21 tests)",
+        "Resource service (26 tests)",
+        "Reservation service (52 tests)",
+        "Database operations (15 tests)",
+        "Middleware (13 tests)"
+      ],
+      "integration_tests": [
+        "Auth API endpoints (11 tests)",
+        "Resource API endpoints (12 tests)",
+        "Reservation API endpoints (17 tests)"
+      ],
+      "total_tests": 205,
+      "coverage_target": "100%"
+    },
+    "frontend_tests": {
+      "component_tests": [
+        "Login page tests",
+        "Register page tests",
+        "Dashboard tests",
+        "Resources page tests",
+        "Resource form tests",
+        "Reservations page tests",
+        "Reservation form tests",
+        "Blocked slots page tests"
+      ],
+      "context_tests": [
+        "AuthContext tests"
+      ],
+      "route_tests": [
+        "ProtectedRoute tests"
+      ],
+      "api_tests": [
+        "API client tests"
+      ],
+      "coverage_target": "100%"
+    }
+  },
+  "concurrency_handling": {
+    "approach": "Transaction-based locking with double-check pattern",
+    "implementation": "BEGIN IMMEDIATE TRANSACTION for serializable isolation",
+    "validation": "Concurrent approval tests with Promise.all"
+  },
+  "success_criteria": [
+    "All backend tests passing with 100% coverage",
+    "All frontend tests passing with 100% coverage",
+    "Concurrent reservation approval prevents double-booking",
+    "State machine transitions enforced correctly",
+    "JWT authentication working across all protected endpoints",
+    "Role-based authorization prevents unauthorized actions",
+    "Time overlap detection prevents conflicts",
+    "Docker deployment works with docker-compose up",
+    "README documentation is complete and accurate",
+    "Trajectory document reflects actual development process"
+  ],
+  "evaluation_metrics": {
+    "functionality": {
+      "weight": 0.40,
+      "criteria": [
+        "All required features implemented",
+        "State machine correct",
+        "Concurrency safety proven",
+        "API follows REST principles"
+      ]
+    },
+    "code_quality": {
+      "weight": 0.25,
+      "criteria": [
+        "Separation of concerns",
+        "Error handling",
+        "Code organization",
+        "Comments and documentation"
+      ]
+    },
+    "testing": {
+      "weight": 0.25,
+      "criteria": [
+        "100% coverage achieved",
+        "Concurrent scenarios tested",
+        "Edge cases covered",
+        "Integration tests present"
+      ]
+    },
+    "deployment": {
+      "weight": 0.10,
+      "criteria": [
+        "Docker configuration correct",
+        "README complete",
+        "Environment variables documented"
+      ]
+    }
+  }
+}
