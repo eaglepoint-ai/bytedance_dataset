@@ -5,18 +5,18 @@ ENV DOTNET_SKIP_FIRST_TIME_EXPERIENCE=1 \
     NUGET_FALLBACK_PACKAGES=
 WORKDIR /src
 
-COPY BD-RL-002-sw_crm_contact_search.sln .
-COPY BD-RL-002-sw_crm_contact_search.csproj .
+COPY BD-RL-009-swe_skill_matching.sln .
+COPY BD-RL-009-swe_skill_matching.csproj .
 COPY repository_before/repository_before.csproj repository_before/
 COPY repository_after/repository_after.csproj repository_after/
 COPY tests/tests.csproj tests/
 
-RUN dotnet restore BD-RL-002-sw_crm_contact_search.csproj /p:DisableImplicitNuGetFallbackFolder=true
+RUN dotnet restore BD-RL-009-swe_skill_matching.csproj /p:DisableImplicitNuGetFallbackFolder=true
 RUN dotnet restore tests/tests.csproj /p:DisableImplicitNuGetFallbackFolder=true
 
 COPY . .
 
-RUN dotnet build BD-RL-002-sw_crm_contact_search.csproj -c Release --no-restore /p:DisableImplicitNuGetFallbackFolder=true
+RUN dotnet build BD-RL-009-swe_skill_matching.csproj -c Release --no-restore /p:DisableImplicitNuGetFallbackFolder=true
 RUN dotnet build tests/tests.csproj -c Release --no-restore /p:DisableImplicitNuGetFallbackFolder=true
 
 FROM build AS publish
