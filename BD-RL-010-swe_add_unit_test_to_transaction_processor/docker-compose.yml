@@ -1,0 +1,21 @@
+version: "3.8"
+
+services:
+  tests:
+    build: .
+    volumes:
+      - .:/app
+    command: >
+      pytest -q
+      tests/test_transaction_processor_rules_meta.py
+  benchmark:
+    build: .
+    volumes:
+      - .:/app
+    command: >
+      python evaluation/performance_benchmark.py
+        --transactions ${TRANSACTIONS:-500}
+        --customers ${CUSTOMERS:-60}
+        --iterations ${ITERATIONS:-5}
+        --seed ${SEED:-42}
+        --output-dir ${OUTPUT_DIR:-evaluation}
