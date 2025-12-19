@@ -1,0 +1,116 @@
+{
+  "runId": "ef93f4cd",
+  "startedAt": "2025-12-19T15:17:37.1382771Z",
+  "finishedAt": "2025-12-19T15:17:45.5456166Z",
+  "durationSeconds": 8.4073395,
+  "success": true,
+  "error": null,
+  "parameters": {
+    "iterations": 5,
+    "threshold": 15,
+    "outputDir": "D:\\WorkFiles\\seed_test\\bytedance_dataset\\BD-RL-009-swe_skill_matching\\evaluation",
+    "scenarios": [
+      {
+        "name": "skills160_slots20",
+        "requiredSkills": 160,
+        "requiredTimeSlots": 20
+      },
+      {
+        "name": "skills320_slots40",
+        "requiredSkills": 320,
+        "requiredTimeSlots": 40
+      },
+      {
+        "name": "skills640_slots80",
+        "requiredSkills": 640,
+        "requiredTimeSlots": 80
+      }
+    ]
+  },
+  "environment": {
+    "dotnetVersion": "8.0.19",
+    "osDescription": "Microsoft Windows 10.0.26100",
+    "osArchitecture": "X64",
+    "processArchitecture": "X64",
+    "gitCommit": "1a41d13",
+    "gitBranch": "main"
+  },
+  "metrics": {
+    "seedStats": {
+      "employees": 1000,
+      "skills": 4473,
+      "availabilitySlots": 3473
+    },
+    "scenarios": {
+      "skills160_slots20": {
+        "parameters": {
+          "name": "skills160_slots20",
+          "requiredSkills": 160,
+          "requiredTimeSlots": 20
+        },
+        "before": {
+          "avgMs": 97.22,
+          "minMs": 88.62,
+          "maxMs": 108.32
+        },
+        "after": {
+          "avgMs": 18.85,
+          "minMs": 17.07,
+          "maxMs": 22.93
+        },
+        "comparison": {
+          "speedup": 5.16,
+          "improvementPct": 80.6
+        }
+      },
+      "skills320_slots40": {
+        "parameters": {
+          "name": "skills320_slots40",
+          "requiredSkills": 320,
+          "requiredTimeSlots": 40
+        },
+        "before": {
+          "avgMs": 92.11,
+          "minMs": 82.94,
+          "maxMs": 107.9
+        },
+        "after": {
+          "avgMs": 18.31,
+          "minMs": 16.17,
+          "maxMs": 20.76
+        },
+        "comparison": {
+          "speedup": 5.03,
+          "improvementPct": 80.1
+        }
+      },
+      "skills640_slots80": {
+        "parameters": {
+          "name": "skills640_slots80",
+          "requiredSkills": 640,
+          "requiredTimeSlots": 80
+        },
+        "before": {
+          "avgMs": 83.47,
+          "minMs": 74.88,
+          "maxMs": 87.79
+        },
+        "after": {
+          "avgMs": 13.44,
+          "minMs": 12.21,
+          "maxMs": 14.59
+        },
+        "comparison": {
+          "speedup": 6.21,
+          "improvementPct": 83.9
+        }
+      }
+    },
+    "summary": {
+      "beforeAvgMs": 90.93,
+      "afterAvgMs": 16.87,
+      "overallSpeedup": 5.39,
+      "overallImprovementPct": 81.5
+    }
+  }
+}
