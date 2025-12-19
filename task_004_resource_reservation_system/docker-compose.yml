@@ -2,7 +2,7 @@ services:
   backend:
     build:
       context: ./repository_after/backend
-      dockerfile: ../../Dockerfile.backend
+      dockerfile: Dockerfile.backend
     ports:
       - "3001:3001"
     environment:
@@ -21,7 +21,7 @@ services:
   frontend:
     build:
       context: ./repository_after/frontend
-      dockerfile: ../../Dockerfile.frontend
+      dockerfile: Dockerfile.frontend
     ports:
       - "8080:80"
     depends_on:

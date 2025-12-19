@@ -93,20 +93,17 @@ docker-compose down
 
 ### Run Tests
 
-**Backend Tests (with coverage):**
+**Run All Tests (Backend + Frontend):**
 ```bash
 docker run --rm \
-  -v "$(pwd)/repository_after/backend:/app" \
-  -w /app \
-  node:18-alpine sh -c 'npm ci && npm test'
-```
-
-**Frontend Tests:**
-```bash
-docker run --rm \
-  -v "$(pwd)/repository_after/frontend:/app" \
-  -w /app \
-  node:18-alpine sh -c 'npm ci && npx vitest run'
+  -v "$(pwd)/repository_after/backend:/backend" \
+  -v "$(pwd)/repository_after/frontend:/frontend" \
+  node:18-alpine sh -c '
+    echo "Running backend tests..." && \
+    cd /backend && npm ci && npm test && \
+    echo "Running frontend tests..." && \
+    cd /frontend && npm ci && npx vitest run
+  '
 ```
 
 **Test Results:**
@@ -115,47 +112,6 @@ docker run --rm \
 - Services: 100% coverage (all business logic)
 
 **Note:** Some frontend tests are skipped due to localStorage/AuthProvider timing issues in test environment. These represent integration tests that require more complex setup. Core functionality is tested and passing.
-
-## Project Structure
-
-```
-task_004_resource_reservation_system/
-├── docker-compose.yml              # Container orchestration
-├── Dockerfile.backend              # Backend container definition
-├── Dockerfile.frontend             # Frontend multi-stage build
-├── README.md                       # Project documentation
-│
-├── repository_after/               # Application source code
-│   ├── backend/                    # Node.js/Express API
-│   │   ├── src/
-│   │   │   ├── controllers/        # API route handlers
-│   │   │   ├── services/           # Business logic (100% coverage)
-│   │   │   ├── middleware/         # Authentication & validation
-│   │   │   ├── database/           # SQLite setup & schema
-│   │   │   └── utils/              # Helper functions
-│   │   └── package.json
-│   │
-│   └── frontend/                   # React application
-│       ├── src/
-│       │   ├── pages/              # Route components (8 pages)
-│       │   ├── context/            # Auth context provider
-│       │   └── api/                # Axios API client
-│       ├── nginx.conf              # Nginx configuration
-│       └── package.json
-│
-├── tests/                          # Centralized test directory (186 tests)
-│   ├── backend/                    # Backend Jest tests (9 test files)
-│   └── frontend/                   # Frontend Vitest tests (11 test files)
-│
-├── evaluation/
-│   └── requirements_checklist.md   # Requirements verification (78/78)
-│
-├── trajectory/
-│   └── trajectory.md               # Development process documentation
-│
-└── instances/
-    └── task_004.json               # Original requirements specification
-```
 
 ## API Endpoints
 
