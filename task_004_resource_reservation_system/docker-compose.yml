@@ -4,34 +4,47 @@ services:
       context: ./repository_after/backend
       dockerfile: Dockerfile.backend
     ports:
-      - "3001:3001"
+      - "3000:3000"
     environment:
-      - NODE_ENV=production
-      - PORT=3001
+      - NODE_ENV=development
+      - PORT=3000
       - JWT_SECRET=${JWT_SECRET:-your-secret-key-change-in-production}
     volumes:
       - backend-data:/app/data
     healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3001/health"]
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000/health"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 40s
 
   frontend:
-    build:
-      context: ./repository_after/frontend
-      dockerfile: Dockerfile.frontend
+    image: node:24-alpine
+    working_dir: /app
+    command: sh -c "npm i && npm run dev -- --host"
     ports:
-      - "8080:80"
+      - "5173:5173"
+    volumes:
+      - ./repository_after/frontend:/app
     depends_on:
       - backend
     healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost"]
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:5173"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 40s
+
+  tests:
+    image: node:24-alpine
+    working_dir: /app
+    volumes:
+      - .:/app
+    command: sh -c "cd repository_after/backend && npm i && cd ../frontend && npm i && cd ../../ && node evaluation/run_tests.js"
+    environment:
+      - DOCKER_IMAGE=node:24-alpine
+    profiles:
+      - tests
 
 volumes:
   backend-data:

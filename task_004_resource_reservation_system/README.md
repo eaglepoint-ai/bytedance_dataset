@@ -78,9 +78,9 @@ docker-compose up --build
 ```
 
 **Access URLs:**
-- Frontend: http://localhost:8080
-- Backend API: http://localhost:3001/api
-- Health Check: http://localhost:3001/health
+- Client (Vite dev): http://localhost:5173
+- Server API: http://localhost:3000/api
+- Health Check: http://localhost:3000/health
 
 **Test Credentials:**
 - Admin: `admin@example.com` / `admin123`
@@ -93,23 +93,14 @@ docker-compose down
 
 ### Run Tests
 
-**Run All Tests (Backend + Frontend):**
+**Run All Tests (Backend + Frontend) via Compose:**
 ```bash
-docker run --rm \
-  -v "$(pwd)/repository_after/backend:/backend" \
-  -v "$(pwd)/repository_after/frontend:/frontend" \
-  node:18-alpine sh -c '
-    echo "Running backend tests..." && \
-    cd /backend && npm ci && npm test && \
-    echo "Running frontend tests..." && \
-    cd /frontend && npm ci && npx vitest run
-  '
+docker-compose run --build tests
 ```
+This generates `evaluation/report.json` summarizing results for both frontend (Vitest) and backend (Jest).
 
 **Test Results:**
-- Backend: 179/186 passed (7 skipped), 93.96% coverage in `__tests__/` directory
-- Frontend: 49/77 passed (28 skipped), following best practices in `src/__tests__/`
-- Services: 100% coverage (all business logic)
+See `evaluation/report.json` for detailed pass/fail counts and per-test summaries.
 
 **Note:** Some frontend tests are skipped due to localStorage/AuthProvider timing issues in test environment. These represent integration tests that require more complex setup. Core functionality is tested and passing.
 
