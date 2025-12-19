@@ -45,7 +45,7 @@ def seed_data(session):
 
     t1 = datetime(2024, 1, 1, 10, 0, 0)
     t2 = datetime(2024, 1, 2, 10, 0, 0)
-    t3 = datetime(2024, 1, 3, 10, 0s, 0)
+    t3 = datetime(2024, 1, 3, 10, 0, 0)
     t4 = datetime(2024, 1, 4, 10, 0, 0)
 
     # u1: 3 orders
@@ -93,7 +93,7 @@ class QueryCounter:
 def test_correctness_latest_2_orders_per_active_user(session):
     u1, u2, u3, u4, u5 = seed_data(session)
 
-    res = latest_orders_per_active_user(session, n=2)
+    res = latest_orders_per_active_user(session, top_n=2)
 
     assert set(res.keys()) == {u1.id, u2.id, u3.id, u5.id}  # inactive excluded, no-orders included
     assert [o.id for o in res[u1.id]] == [103, 102]
@@ -105,14 +105,14 @@ def test_correctness_latest_2_orders_per_active_user(session):
 def test_tie_breaking_created_at_then_id_desc(session):
     _, _, u3, _, _ = seed_data(session)
 
-    res = latest_orders_per_active_user(session, n=3)
+    res = latest_orders_per_active_user(session, top_n=3)
     assert [o.id for o in res[u3.id]] == [303, 302, 304]
 
 
 def test_n_zero_returns_empty_lists_for_active_users(session):
     u1, u2, u3, u4, u5 = seed_data(session)
 
-    res = latest_orders_per_active_user(session, n=0)
+    res = latest_orders_per_active_user(session, top_n=0)
 
     assert set(res.keys()) == {u1.id, u2.id, u3.id, u5.id}
     assert all(v == [] for v in res.values())
@@ -127,6 +127,6 @@ def test_regression_query_count_must_be_small(session):
     engine = session.get_bind()
 
     with QueryCounter(engine) as qc:
-        _ = latest_orders_per_active_user(session, n=2)
+        _ = latest_orders_per_active_user(session, top_n=2)
 
     assert qc.count <= 3, f"Too many SQL statements: {qc.count} (N+1 likely present)"

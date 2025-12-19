@@ -7,7 +7,7 @@ from typing import Dict, List
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, aliased
 
-from repository_after.models import Order, User
+from models import Order, User
 
 
 def latest_orders_per_active_user(session: Session, top_n: int = 2) -> Dict[int, List[Order]]:
