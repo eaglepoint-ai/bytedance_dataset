@@ -1,5 +1,5 @@
 {
-  "instance_id": "task_003_performance_and_semantic_stability",
+  "instance_id": "BD-RL-008-performance_and_semantic_stability",
     "problem_statement": "Optimize the performance of the format_ids function while ensuring semantic stability. The refactored code must produce byte-for-byte identical outputs for all existing test cases but execute more efficiently by eliminating repeated regex compilation overhead. Pre-compile the regex pattern at module level to avoid O(n) compilation cost in the loop.",
     "base_commit": "repository_before",
     "test_patch": "tests/",
