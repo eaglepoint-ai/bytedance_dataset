@@ -9,6 +9,6 @@ const io = initializeSocket(server);
 
 handleConnection(io);
 
-server.listen(3001, () => {
-  console.log("SERVER RUNNING ON 3001");
+server.listen(3000, () => {
+  console.log("SERVER RUNNING ON 3000");
 });
