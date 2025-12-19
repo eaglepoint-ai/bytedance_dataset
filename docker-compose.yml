@@ -23,6 +23,11 @@ services:
     build:
       context: ./tests
       dockerfile: Dockerfile
+    volumes:
+      - ./evaluations:/app/evaluations
+      - ./repository_after/client:/app/client
+      - ./repository_after/server:/app/server
+    command: node /app/evaluations/run.js
     networks:
       - app-network
     environment:

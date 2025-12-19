@@ -1,12 +1,11 @@
-import { handleConnection } from "../../repository_after/server/services/socketHandlers";
-import { initializeSocket, rooms, userMeta } from "../../repository_after/server/services/socket";
+import { handleConnection } from "@/server/services/socketHandlers";
+import { initializeSocket, rooms, userMeta } from "@/server/services/socket";
 import { createServer } from "http";
 import Client from "socket.io-client";
 
 describe("Backend Tests", () => {
   let io, server, port;
   let clients = [];
-
 
   const createClient = () => {
     const client = new Client(`http://127.0.0.1:${port}`);
@@ -15,7 +14,6 @@ describe("Backend Tests", () => {
       client.on("connect", () => resolve(client));
     });
   };
-
 
   const waitForEvent = (socket, event) => {
     return new Promise((resolve) => {
@@ -88,7 +86,6 @@ describe("Backend Tests", () => {
 
     const clientB = await createClient();
     clientB.emit("join-room", { roomId, username: "Guest" });
-
 
     const request = await waitForEvent(clientA, "request-state");
     expect(request.requesterId).toBe(clientB.id);

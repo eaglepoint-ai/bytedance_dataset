@@ -13,7 +13,7 @@ module.exports = {
   },
   moduleNameMapper: {
     "\\.(css|less)$": "<rootDir>/mocks/styleMock.js",
-    "^@/client/(.*)$": "<rootDir>/../repository_after/client/src/$1",
+    "^@/client/(.*)$": "<rootDir>/client/src/$1",
     "^react$": "<rootDir>/node_modules/react",
   },
   setupFilesAfterEnv: ["<rootDir>/jest.setup.js"],
