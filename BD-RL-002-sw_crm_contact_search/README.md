@@ -26,6 +26,10 @@ dotnet run --project repository_after/repository_after.csproj
 
 # Execute tests
 dotnet test tests/tests.csproj
+
+# Run individual performance suites in Docker
+docker compose run --rm tests dotnet test tests/tests.csproj --filter RepositoryBeforePerformanceTests -c Release -v minimal
+docker compose run --rm tests dotnet test tests/tests.csproj --filter RepositoryAfterPerformanceTests -c Release -v minimal
 ```
 
 ## Tasks
