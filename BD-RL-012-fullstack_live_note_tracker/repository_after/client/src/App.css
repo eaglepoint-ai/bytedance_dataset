@@ -1,0 +1,46 @@
+.editor-wrapper {
+  position: relative;
+  width: 800px;
+  height: 500px;
+  margin: 20px auto;
+  border: 1px solid #ccc;
+  font-family: "Courier New", Courier, monospace; /* Monospace is easiest for alignment */
+  font-size: 16px;
+  line-height: 24px;
+}
+
+textarea,
+.editor-backdrop {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  padding: 20px;
+  box-sizing: border-box;
+  font-family: inherit;
+  font-size: inherit;
+  line-height: inherit;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  overflow-y: auto;
+}
+
+.editor-backdrop {
+  z-index: 1;
+  color: transparent;
+  pointer-events: none;
+}
+
+textarea {
+  z-index: 2;
+  background: transparent;
+  color: #333;
+  border: none;
+  resize: none;
+  outline: none;
+}
+
+.editor-backdrop span {
+  color: transparent;
+}
