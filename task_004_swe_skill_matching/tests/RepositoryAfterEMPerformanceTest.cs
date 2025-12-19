@@ -67,7 +67,7 @@ public sealed class RepositoryAfterEMPerformanceTest : IAsyncLifetime
                 await matcher.FindBestEmployeesForProject(requirements);
             });
 
-        var budget = TimeSpan.FromSeconds(5);
+        var budget = TimeSpan.FromSeconds(2);
         Assert.True(
             median < budget,
             $"Warm run median {median.TotalMilliseconds:F0} ms exceeded budget {budget.TotalMilliseconds:F0} ms.");
