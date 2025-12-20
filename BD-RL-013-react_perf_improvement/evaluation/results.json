@@ -1,8 +1,0 @@
-{
-  "before_lines": 111,
-  "after_lines": 109,
-  "before_has_map_with_spread": true,
-  "after_has_map_with_spread": false,
-  "after_uses_isSelected": true,
-  "after_moves_label_computation": true
-}

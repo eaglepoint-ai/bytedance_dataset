@@ -1,0 +1,8 @@
+{
+  "before_lines": 24,
+  "after_lines": 86,
+  "before_uses_threadpool": false,
+  "after_uses_threadpool": true,
+  "after_uses_MAX_WORKERS_50": true,
+  "after_streams_work": true
+}
