@@ -9,7 +9,7 @@ To get started with the application, you need to have Docker and Docker Compose 
 1.  **Build and run the application:**
 
     ```bash
-    docker-compose up --build
+    docker compose up --build
     ```
 
     This will build the Docker images for the client, server, and tests, and then start the services.

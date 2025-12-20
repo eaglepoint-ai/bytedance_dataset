@@ -23,11 +23,11 @@ docker compose up --build
 ```
 
 **Test suites included:**
-- Backend API tests (pytest)
-- Database tests (pytest)
-- Frontend unit tests (vitest)
-- Frontend component tests (vitest + React Testing Library)
-- Frontend integration tests (vitest)
+- Backend API tests (pytest) - HTTP integration tests against running services
+- Database tests (pytest) - Model and data integrity tests
+- Frontend unit tests (vitest) - Component rendering and logic
+- Frontend component tests (vitest + React Testing Library) - User interactions
+- Frontend integration tests (vitest) - Multi-component workflows
 
 ## Project Structure
 
@@ -36,17 +36,29 @@ repository_after/meeting-scheduler/
 ├── api/          # FastAPI backend + PostgreSQL
 ├── auth/         # Node.js/TypeScript auth service
 ├── web/          # React/Vite frontend
-tests/            # All test files
+tests/            # All test files (root level)
+├── frontend_*.test.*  # Frontend component/integration tests
+├── test_backend_api.py     # Backend API tests
+├── test_database.py        # Database model tests
+└── vitest.config.ts   # Frontend test configuration
 ```
 
 ## Manual Testing
 
 ```bash
-# Backend tests only
+# Backend tests only (run locally against running services)
 cd repository_after/meeting-scheduler
-docker compose exec api pytest -v
+docker compose up -d  # Start services first
+cd ../..
+export API_BASE_URL=http://localhost:8000
+export AUTH_BASE_URL=http://localhost:3001
+pytest tests/test_backend_api.py tests/test_database.py -v
 
-# Frontend tests only
+# Frontend tests only (in Docker)
+cd repository_after/meeting-scheduler
+docker compose run --rm test-frontend
+
+# Frontend tests only (local development)
 cd tests
 npm install
 npm test

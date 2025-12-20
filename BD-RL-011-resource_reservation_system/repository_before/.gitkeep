@@ -1,0 +1,3 @@
+# This file ensures the repository_before directory is tracked in version control
+# The repository_before folder represents the initial state before refactoring
+# It is intentionally empty to allow comparison with repository_after
