@@ -13,17 +13,24 @@ function genId(len = 8) {
   return crypto.randomBytes(Math.ceil(len / 2)).toString('hex').slice(0, len);
 }
 
-function ensureDir(dir) {
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-}
-
 function run(cmd, args, options = {}) {
+  const { printStdout = true, ...spawnOptions } = options;
   return new Promise((resolve, reject) => {
-    const child = spawn(cmd, args, { stdio: ['ignore', 'pipe', 'pipe'], ...options });
+    const child = spawn(cmd, args, { stdio: ['ignore', 'pipe', 'pipe'], ...spawnOptions });
     let stdout = '';
     let stderr = '';
-    child.stdout.on('data', (d) => (stdout += d.toString()));
-    child.stderr.on('data', (d) => (stderr += d.toString()));
+    child.stdout.on('data', (d) => {
+      const str = d.toString();
+      stdout += str;
+      if (printStdout) {
+        process.stdout.write(str);
+      }
+    });
+    child.stderr.on('data', (d) => {
+      const str = d.toString();
+      stderr += str;
+      process.stderr.write(str);
+    });
     child.on('close', (code) => {
       resolve({ code, stdout, stderr });
     });
@@ -31,31 +38,31 @@ function run(cmd, args, options = {}) {
   });
 }
 
-async function runBackend(jestJsonPath) {
-  const res = await run('npm', ['test', '--', `--json`, `--outputFile=${jestJsonPath}`], {
+async function runBackend() {
+  // With --json flag: JSON goes to stdout, human-readable output goes to stderr
+  // We don't print stdout (it's JSON), but stderr gets printed (human-readable test results)
+  const res = await run('npm', ['test', '--', '--json'], {
     cwd: path.join(process.cwd(), 'repository_after', 'backend'),
-    env: { ...process.env, NODE_ENV: 'test' }
+    env: { ...process.env, NODE_ENV: 'test' },
+    printStdout: false
   });
   return res;
 }
 
-async function runFrontend(vitestJsonPath) {
+async function runFrontend() {
+  // Vitest with --reporter=json outputs JSON to stdout
+  // We don't print stdout (it's JSON), stderr gets printed
   const res = await run('npx', ['vitest', 'run', '--reporter=json'], {
     cwd: path.join(process.cwd(), 'repository_after', 'frontend'),
-    env: { ...process.env, NODE_ENV: 'test' }
+    env: { ...process.env, NODE_ENV: 'test' },
+    printStdout: false
   });
-  // Vitest prints JSON to stdout; save it
-  try {
-    fs.writeFileSync(vitestJsonPath, res.stdout || '{}', 'utf-8');
-  } catch (e) {
-    // ignore
-  }
   return res;
 }
 
-function safeJsonRead(p) {
+function safeJsonParse(str) {
   try {
-    return JSON.parse(fs.readFileSync(p, 'utf-8'));
+    return JSON.parse(str);
   } catch (e) {
     return null;
   }
@@ -125,10 +132,6 @@ function summarizeJest(json) {
 async function main() {
   const started_at = nowIso();
   const run_id = genId(8);
-  const tmpDir = path.join(process.cwd(), 'evaluation', 'tmp');
-  ensureDir(tmpDir);
-  const backendJsonPath = path.join(tmpDir, 'backend_results.json');
-  const frontendJsonPath = path.join(tmpDir, 'frontend_results.json');
 
   const envInfo = {
     node_version: process.version,
@@ -142,22 +145,23 @@ async function main() {
   let success = true;
   let error = null;
 
-  // Run tests
-  const be = await runBackend(backendJsonPath);
+  // Run backend tests - JSON comes from stdout
+  const be = await runBackend();
   if (be.code !== 0) {
     success = false;
-    error = error || `Backend tests failed: ${be.stderr}`;
+    error = error || `Backend tests failed`;
   }
 
-  const fe = await runFrontend(frontendJsonPath);
-  // Vitest exits non-zero on failures; capture
+  // Run frontend tests - JSON comes from stdout
+  const fe = await runFrontend();
   if (fe.code !== 0) {
     success = false;
-    error = error || `Frontend tests failed: ${fe.stderr}`;
+    error = error || `Frontend tests failed`;
   }
 
-  const backendJson = safeJsonRead(backendJsonPath);
-  const frontendJson = safeJsonRead(frontendJsonPath);
+  // Parse JSON from stdout
+  const backendJson = safeJsonParse(be.stdout);
+  const frontendJson = safeJsonParse(fe.stdout);
 
   const backendMetrics = summarizeJest(backendJson);
   const frontendMetrics = summarizeVitest(frontendJson);

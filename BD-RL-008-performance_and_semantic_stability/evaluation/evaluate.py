@@ -56,6 +56,14 @@ def run_tests(pythonpath, test_type=None):
     # Temporarily modify sys.path to include the repository
     repo_path = base_dir / pythonpath
     original_sys_path = sys.path[:]
+    
+    # CRITICAL: Clear any cached format_ids module and test modules to ensure
+    # we import from the correct repository version
+    modules_to_clear = [name for name in list(sys.modules.keys()) 
+                        if 'format_ids' in name or name.startswith('test_')]
+    for mod in modules_to_clear:
+        del sys.modules[mod]
+    
     sys.path.insert(0, str(repo_path))
 
     test_results = {
@@ -95,48 +103,62 @@ def run_tests(pythonpath, test_type=None):
 
             # Run pytest programmatically
             with contextlib.redirect_stdout(output_buffer), contextlib.redirect_stderr(output_buffer):
-                args = test_files + ['--tb=short', '-q', '--disable-warnings']
+                args = test_files + ['--tb=short', '-q', '--disable-warnings', '--cache-clear', '-p', 'no:cacheprovider']
                 exit_code = pytest.main(args)
 
             output = output_buffer.getvalue()
 
             # Parse pytest output for summary
+            # Look for pytest summary line pattern like "50 passed, 4 failed in 0.05s"
+            # or "= 50 passed in 0.05s =" or just "50 passed"
+            import re as re_module
+            
             lines = output.split('\n')
+            summary_found = False
+            
             for line in reversed(lines):
                 line = line.strip()
                 if not line:
                     continue
-
-                # Parse summary lines
-                if any(keyword in line.lower() for keyword in ['passed', 'failed', 'error', 'skipped']):
-                    parts = line.replace(',', ' ').split()
-                    i = 0
-                    while i < len(parts) - 1:
-                        if parts[i].isdigit():
-                            count = int(parts[i])
-                            category = parts[i + 1].lower()
-                            if 'passed' in category:
-                                test_results['passed'] = count
-                            elif 'failed' in category:
-                                test_results['failed'] = count
-                            elif 'error' in category or 'errors' in category:
-                                test_results['errors'] = count
-                            elif 'skipped' in category:
-                                test_results['skipped'] = count
-                            i += 2
-                        else:
-                            i += 1
-
+                
+                # Look for pytest summary pattern: digits followed by 'passed', 'failed', etc.
+                # This pattern specifically matches pytest summary lines
+                summary_pattern = r'(\d+)\s+(passed|failed|error|errors|skipped)'
+                matches = re_module.findall(summary_pattern, line.lower())
+                
+                if matches:
+                    for count_str, category in matches:
+                        count = int(count_str)
+                        if 'passed' in category:
+                            test_results['passed'] = count
+                            summary_found = True
+                        elif 'failed' in category:
+                            test_results['failed'] = count
+                            summary_found = True
+                        elif 'error' in category:
+                            test_results['errors'] = count
+                            summary_found = True
+                        elif 'skipped' in category:
+                            test_results['skipped'] = count
+                            summary_found = True
+                    
                     # Look for duration
                     if ' in ' in line:
                         try:
-                            duration_part = line.split(' in ')[1].split('s')[0]
-                            test_results['duration'] = float(duration_part)
+                            duration_match = re_module.search(r'in\s+([\d.]+)s', line)
+                            if duration_match:
+                                test_results['duration'] = float(duration_match.group(1))
                         except:
                             pass
-                    break
+                    
+                    if summary_found:
+                        break
 
             test_results['total'] = test_results['passed'] + test_results['failed'] + test_results['errors'] + test_results['skipped']
+            
+            # If pytest parsing failed (total is 0), fall back to manual test runner
+            if test_results['total'] == 0:
+                test_results = _run_tests_manually(base_dir, test_type, test_results)
 
         except ImportError:
             # Fallback: run tests manually by importing and executing test classes
@@ -148,6 +170,13 @@ def run_tests(pythonpath, test_type=None):
             'error': f'Test execution failed: {str(e)}'
         })
     finally:
+        # Clean up cached modules to prevent pollution between runs
+        modules_to_clear = [name for name in list(sys.modules.keys()) 
+                           if 'format_ids' in name or name.startswith('test_')]
+        for mod in modules_to_clear:
+            if mod in sys.modules:
+                del sys.modules[mod]
+        
         # Restore original sys.path
         sys.path[:] = original_sys_path
 

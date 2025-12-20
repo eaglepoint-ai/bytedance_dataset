@@ -64,10 +64,10 @@ pytest tests/test_performance_improvement.py -v
 docker compose run --rm app python evaluation/evaluate.py
 
 # Run tests for 'before' version only
-docker compose run --rm -e PYTHONPATH=/app/repository_before app python evaluation/evaluate.py --test-type behavior_preservation
+docker compose run --rm -e PYTHONPATH=/app/repository_before app pytest -q
 
 # Run tests for 'after' version only
-docker compose run --rm -e PYTHONPATH=/app/repository_after app python evaluation/evaluate.py --test-type behavior_preservation
+docker compose run --rm -e PYTHONPATH=/app/repository_after app pytest -q
 
 # Run specific test category
 docker compose run --rm -e PYTHONPATH=/app/repository_after app python evaluation/evaluate.py --test-type performance_improvement

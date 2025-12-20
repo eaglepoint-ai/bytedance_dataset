@@ -1,6 +1,7 @@
 {
-  "instance_id": "task_004_resource_reservation_system",
+  "instance_id": "BD-RL-011",
   "task_description": "Design and implement a full-stack web application that allows an organization to manage shared resources (meeting rooms, equipment, vehicles, etc.) with a reservation system. The application must support multiple users with role-based access control, handle concurrent reservations safely, and provide both REST API and user interface.",
+  "repo": "https://github.com/eaglepoint-ai/bytedance_dataset/tree/main/BD-RL-011-resource_reservation_system",
   "required_features": [
     "User authentication and authorization (JWT-based)",
     "Role-based access control (Admin and User roles)",

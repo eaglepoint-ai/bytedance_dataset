@@ -19,16 +19,17 @@ describe("Auth API Integration Tests", () => {
 
   describe("POST /api/auth/register", () => {
     it("should register new user successfully", async () => {
+      const uniqueEmail = `register-test-${Date.now()}@example.com`;
       const response = await request(app).post("/api/auth/register").send({
         name: "Test User",
-        email: "test@example.com",
+        email: uniqueEmail,
         password: "password123",
       });
 
       expect(response.status).toBe(201);
       expect(response.body).toHaveProperty("user");
       expect(response.body).toHaveProperty("token");
-      expect(response.body.user.email).toBe("test@example.com");
+      expect(response.body.user.email).toBe(uniqueEmail);
       expect(response.body.user.role).toBe("user");
     });
 

@@ -88,14 +88,14 @@ docker-compose up --build
 
 ### Stop Application
 ```bash
-docker-compose down
+docker compose down
 ```
 
 ### Run Tests
 
 **Run All Tests (Backend + Frontend) via Compose:**
 ```bash
-docker-compose run --build tests
+docker compose run --build tests
 ```
 This generates `evaluation/report.json` summarizing results for both frontend (Vitest) and backend (Jest).
 

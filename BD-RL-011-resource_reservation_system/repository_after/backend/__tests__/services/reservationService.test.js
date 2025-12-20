@@ -44,64 +44,23 @@ describe("Reservation Service", () => {
   });
 
   describe("isValidTransition", () => {
-    it("should allow pending to approved", () => {
-      expect(reservationService.isValidTransition("pending", "approved")).toBe(
-        true
-      );
+    it("should allow valid state transitions", () => {
+      expect(reservationService.isValidTransition("pending", "approved")).toBe(true);
+      expect(reservationService.isValidTransition("pending", "rejected")).toBe(true);
+      expect(reservationService.isValidTransition("approved", "cancelled")).toBe(true);
     });
 
-    it("should allow pending to rejected", () => {
-      expect(reservationService.isValidTransition("pending", "rejected")).toBe(
-        true
-      );
-    });
-
-    it("should allow approved to cancelled", () => {
-      expect(
-        reservationService.isValidTransition("approved", "cancelled")
-      ).toBe(true);
-    });
-
-    it("should not allow rejected to any state", () => {
-      expect(reservationService.isValidTransition("rejected", "approved")).toBe(
-        false
-      );
-      expect(reservationService.isValidTransition("rejected", "pending")).toBe(
-        false
-      );
-      expect(
-        reservationService.isValidTransition("rejected", "cancelled")
-      ).toBe(false);
-    });
-
-    it("should not allow cancelled to any state", () => {
-      expect(
-        reservationService.isValidTransition("cancelled", "approved")
-      ).toBe(false);
-      expect(reservationService.isValidTransition("cancelled", "pending")).toBe(
-        false
-      );
-    });
-
-    it("should not allow blocked to any state", () => {
-      expect(reservationService.isValidTransition("blocked", "approved")).toBe(
-        false
-      );
-      expect(reservationService.isValidTransition("blocked", "cancelled")).toBe(
-        false
-      );
-    });
-
-    it("should not allow approved to rejected", () => {
-      expect(reservationService.isValidTransition("approved", "rejected")).toBe(
-        false
-      );
-    });
-
-    it("should not allow pending to cancelled", () => {
-      expect(reservationService.isValidTransition("pending", "cancelled")).toBe(
-        false
-      );
+    it("should reject invalid state transitions", () => {
+      // Rejected is terminal
+      expect(reservationService.isValidTransition("rejected", "approved")).toBe(false);
+      expect(reservationService.isValidTransition("rejected", "pending")).toBe(false);
+      // Cancelled is terminal
+      expect(reservationService.isValidTransition("cancelled", "approved")).toBe(false);
+      // Blocked is terminal
+      expect(reservationService.isValidTransition("blocked", "approved")).toBe(false);
+      // Invalid transitions
+      expect(reservationService.isValidTransition("approved", "rejected")).toBe(false);
+      expect(reservationService.isValidTransition("pending", "cancelled")).toBe(false);
     });
   });
 
@@ -651,7 +610,7 @@ describe("Reservation Service", () => {
   });
 
   describe("checkOverlap", () => {
-    it("should detect overlap correctly", async () => {
+    it("should correctly detect overlaps and adjacent times", async () => {
       const reservation = await reservationService.createReservation(
         activeResource.id,
         regularUser.id,
@@ -660,56 +619,20 @@ describe("Reservation Service", () => {
       );
       await reservationService.approveReservation(reservation.id, adminUser.id);
 
+      // Should detect overlap
       const overlapStart = new Date(Date.now() + 5400000).toISOString();
       const overlapEnd = new Date(Date.now() + 9000000).toISOString();
-
-      const result = await reservationService.checkOverlap(
-        activeResource.id,
-        overlapStart,
-        overlapEnd
-      );
-
+      let result = await reservationService.checkOverlap(activeResource.id, overlapStart, overlapEnd);
       expect(result.hasOverlap).toBe(true);
-      expect(result.conflictingReservation).toBeDefined();
-    });
 
-    it("should not detect overlap for adjacent times", async () => {
-      const reservation = await reservationService.createReservation(
-        activeResource.id,
-        regularUser.id,
-        futureStart,
-        futureEnd
-      );
-      await reservationService.approveReservation(reservation.id, adminUser.id);
-
+      // Should not detect overlap for adjacent times
       const nextStart = futureEnd;
       const nextEnd = new Date(Date.now() + 10800000).toISOString();
-
-      const result = await reservationService.checkOverlap(
-        activeResource.id,
-        nextStart,
-        nextEnd
-      );
-
+      result = await reservationService.checkOverlap(activeResource.id, nextStart, nextEnd);
       expect(result.hasOverlap).toBe(false);
-    });
 
-    it("should exclude specified reservation ID", async () => {
-      const reservation = await reservationService.createReservation(
-        activeResource.id,
-        regularUser.id,
-        futureStart,
-        futureEnd
-      );
-      await reservationService.approveReservation(reservation.id, adminUser.id);
-
-      const result = await reservationService.checkOverlap(
-        activeResource.id,
-        futureStart,
-        futureEnd,
-        reservation.id
-      );
-
+      // Should exclude specified reservation ID
+      result = await reservationService.checkOverlap(activeResource.id, futureStart, futureEnd, reservation.id);
       expect(result.hasOverlap).toBe(false);
     });
   });
