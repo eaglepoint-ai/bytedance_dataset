@@ -1,5 +1,0 @@
-services:
-  tests:
-    build: .
-    working_dir: /work
-    command: ["pytest", "-q"]
