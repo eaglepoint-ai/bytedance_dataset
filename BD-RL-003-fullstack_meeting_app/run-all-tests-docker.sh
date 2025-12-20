@@ -20,30 +20,20 @@ docker compose up -d
 echo "✅ Services started"
 echo ""
 
-# Wait for services to be healthy
-echo "⏳ Waiting for services to be healthy..."
-sleep 10
-echo "✅ Services ready"
-echo ""
-
-# Run backend tests LOCALLY
-echo "======================================"
-echo "🐍 Running Backend Tests (LOCAL)"
-echo "======================================"
-cd ../..
-export API_BASE_URL=http://localhost:8000
-export AUTH_BASE_URL=http://localhost:3001
-pytest tests/test_backend_api.py tests/test_database.py -v
-BACKEND_EXIT=$?
-echo ""
-
 # Run frontend tests in Docker
 echo "======================================"
 echo "⚛️  Running Frontend Tests (DOCKER)"
 echo "======================================"
-cd repository_after/meeting-scheduler
 docker compose run --rm test-frontend
 FRONTEND_EXIT=$?
+echo ""
+
+# Run backend tests in Docker
+echo "======================================"
+echo "⚛️  Running Backend Tests (DOCKER)"
+echo "======================================"
+docker compose run --rm test-backend
+BACKEND_EXIT=$?
 echo ""
 
 # Summary
