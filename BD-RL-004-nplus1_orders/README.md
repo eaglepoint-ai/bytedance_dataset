@@ -26,12 +26,13 @@ docker build -t nplus1-orders .
 
 ### Run tests (before – expected FAIL)
 ```bash
-docker run --rm -e PYTHONPATH=/app/repository_before nplus1-orders
+docker compose run --rm -e PYTHONPATH=/app/repository_before app pytest -q tests
 ```
 
 ### Run tests (after – expected PASS)
 ```bash
-docker run --rm -e PYTHONPATH=/app/repository_after nplus1-orders
+docker compose run --rm -e PYTHONPATH=/app/repository_before app pytest -q tests
+
 ```
 
 ### Run evaluation (compares both implementations)
