@@ -12,3 +12,6 @@ repository_before/CrmData/
 *.sqlite-wal
 *.sqlite-shm
 
+
+evaluation
+!evaluation/run_evaluation.csproj

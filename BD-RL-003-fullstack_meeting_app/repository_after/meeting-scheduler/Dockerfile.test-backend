@@ -14,7 +14,7 @@ RUN pip install --no-cache-dir \
 
 # Copy test files and required source code
 COPY tests/ /workspace/tests/
-COPY pytest.ini /workspace/
+COPY tests/pytest.ini /workspace/
 COPY repository_after/meeting-scheduler/api/app /workspace/repository_after/meeting-scheduler/api/app
 
 # Set Python path

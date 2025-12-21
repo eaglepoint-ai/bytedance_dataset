@@ -16,6 +16,25 @@ The "before" app keeps the data access in a single class, while the "after" app 
 
 ## Usage
 
+## Running Tests in Docker
+
+To run specific test suites or evaluations in Docker, use the following commands:
+
+- **Run `repository_before` performance tests:**
+  ```bash
+  docker compose run --rm tests dotnet test tests/tests.csproj --filter RepositoryBeforePerformanceTests -c Release -v minimal
+  ```
+
+- **Run `repository_after` performance tests:**
+  ```bash
+  docker compose run --rm tests dotnet test tests/tests.csproj --filter RepositoryAfterPerformanceTests -c Release -v minimal
+  ```
+
+- **Run evaluation project:**
+  ```bash
+  docker compose run --rm tests dotnet run --project evaluation/run_evaluation.csproj -c Release
+  ```
+
 ```bash
 # Launcher (prompts for before/after)
 dotnet run --project BD-RL-002-sw_crm_contact_search.csproj

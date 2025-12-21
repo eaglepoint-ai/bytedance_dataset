@@ -10,8 +10,23 @@ from datetime import datetime, timedelta, timezone
 import httpx
 import pytest
 
-API_BASE = os.getenv("API_BASE_URL", "http://localhost:8000")
-AUTH_BASE = os.getenv("AUTH_BASE_URL", "http://localhost:3001")
+# Default URLs for Docker environment (auth and api are container hostnames)
+API_BASE = os.getenv("API_BASE_URL", "http://api:8000")
+AUTH_BASE = os.getenv("AUTH_BASE_URL", "http://auth:3001")
+
+# Cookie name used by auth service
+AUTH_COOKIE_NAME = "ms_session"
+
+
+def extract_cookie_header(response: httpx.Response) -> dict:
+    """
+    Extract cookie from response and return as a header dict.
+    This bypasses httpx's domain-scoped cookie jar to allow cross-domain auth.
+    """
+    cookie_value = response.cookies.get(AUTH_COOKIE_NAME)
+    if cookie_value:
+        return {"Cookie": f"{AUTH_COOKIE_NAME}={cookie_value}"}
+    return {}
 
 
 @pytest.fixture
@@ -29,9 +44,10 @@ async def auth_client():
         await auth.post("/api/auth/register", json={"email": email, "password": password, "role": "user"})
         r = await auth.post("/api/auth/login", json={"email": email, "password": password})
         assert r.status_code == 200
-        cookies = r.cookies
-        async with httpx.AsyncClient(base_url=API_BASE, cookies=cookies) as api:
-            yield api, email
+        cookie_header = extract_cookie_header(r)
+    # Use headers instead of cookies to bypass domain restrictions
+    async with httpx.AsyncClient(base_url=API_BASE, headers=cookie_header) as api:
+        yield api, email
 
 
 @pytest.fixture
@@ -43,9 +59,10 @@ async def consultant_client():
         await auth.post("/api/auth/register", json={"email": email, "password": password, "role": "consultant"})
         r = await auth.post("/api/auth/login", json={"email": email, "password": password})
         assert r.status_code == 200
-        cookies = r.cookies
-        async with httpx.AsyncClient(base_url=API_BASE, cookies=cookies) as api:
-            yield api, email
+        cookie_header = extract_cookie_header(r)
+    # Use headers instead of cookies to bypass domain restrictions
+    async with httpx.AsyncClient(base_url=API_BASE, headers=cookie_header) as api:
+        yield api, email
 
 
 # Meeting Tests
@@ -76,11 +93,11 @@ async def test_create_meeting_success(auth_client):
         consultant_email = f"consultant_{uuid.uuid4().hex[:8]}@example.com"
         await auth.post("/api/auth/register", json={"email": consultant_email, "password": "pass123", "role": "consultant"})
         consultant_login = await auth.post("/api/auth/login", json={"email": consultant_email, "password": "pass123"})
-        consultant_cookies = consultant_login.cookies
+        consultant_cookie_header = extract_cookie_header(consultant_login)
         
-        async with httpx.AsyncClient(base_url=API_BASE, cookies=consultant_cookies) as consultant_api:
-            await consultant_api.post("/api/test/reset")
-            await consultant_api.post("/api/slots/seed")
+    async with httpx.AsyncClient(base_url=API_BASE, headers=consultant_cookie_header) as consultant_api:
+        await consultant_api.post("/api/test/reset")
+        await consultant_api.post("/api/slots/seed")
     
     now = datetime.now(timezone.utc)
     from_ = now.isoformat()
@@ -110,11 +127,11 @@ async def test_list_my_meetings(auth_client):
         consultant_email = f"consultant_{uuid.uuid4().hex[:8]}@example.com"
         await auth.post("/api/auth/register", json={"email": consultant_email, "password": "pass123", "role": "consultant"})
         consultant_login = await auth.post("/api/auth/login", json={"email": consultant_email, "password": "pass123"})
-        consultant_cookies = consultant_login.cookies
+        consultant_cookie_header = extract_cookie_header(consultant_login)
         
-        async with httpx.AsyncClient(base_url=API_BASE, cookies=consultant_cookies) as consultant_api:
-            await consultant_api.post("/api/test/reset")
-            await consultant_api.post("/api/slots/seed")
+    async with httpx.AsyncClient(base_url=API_BASE, headers=consultant_cookie_header) as consultant_api:
+        await consultant_api.post("/api/test/reset")
+        await consultant_api.post("/api/slots/seed")
     
     r = await api.get("/api/meetings/me")
     assert r.status_code == 200
@@ -146,11 +163,11 @@ async def test_cancel_meeting_success(auth_client):
         consultant_email = f"consultant_{uuid.uuid4().hex[:8]}@example.com"
         await auth.post("/api/auth/register", json={"email": consultant_email, "password": "pass123", "role": "consultant"})
         consultant_login = await auth.post("/api/auth/login", json={"email": consultant_email, "password": "pass123"})
-        consultant_cookies = consultant_login.cookies
+        consultant_cookie_header = extract_cookie_header(consultant_login)
         
-        async with httpx.AsyncClient(base_url=API_BASE, cookies=consultant_cookies) as consultant_api:
-            await consultant_api.post("/api/test/reset")
-            await consultant_api.post("/api/slots/seed")
+    async with httpx.AsyncClient(base_url=API_BASE, headers=consultant_cookie_header) as consultant_api:
+        await consultant_api.post("/api/test/reset")
+        await consultant_api.post("/api/slots/seed")
     
     now = datetime.now(timezone.utc)
     from_ = now.isoformat()
@@ -179,9 +196,9 @@ async def test_booking_same_slot_twice_returns_409():
         await auth.post("/api/auth/register", json={"email": email, "password": password})
         r = await auth.post("/api/auth/login", json={"email": email, "password": password})
         assert r.status_code == 200
-        cookies = r.cookies
+        cookie_header = extract_cookie_header(r)
 
-    async with httpx.AsyncClient(base_url=API_BASE, cookies=cookies) as api:
+    async with httpx.AsyncClient(base_url=API_BASE, headers=cookie_header) as api:
         await api.post("/api/test/reset")
         
         now = datetime.now(timezone.utc)
@@ -209,9 +226,9 @@ async def test_cancel_reopens_slot():
         await auth.post("/api/auth/register", json={"email": email, "password": password})
         r = await auth.post("/api/auth/login", json={"email": email, "password": password})
         assert r.status_code == 200
-        cookies = r.cookies
+        cookie_header = extract_cookie_header(r)
 
-    async with httpx.AsyncClient(base_url=API_BASE, cookies=cookies) as api:
+    async with httpx.AsyncClient(base_url=API_BASE, headers=cookie_header) as api:
         await api.post("/api/test/reset")
 
         now = datetime.now(timezone.utc)

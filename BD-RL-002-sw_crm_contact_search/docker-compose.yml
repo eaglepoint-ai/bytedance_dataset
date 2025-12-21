@@ -18,3 +18,5 @@ services:
     container_name: bd_rl_002_sw_crm_contact_search_tests
     command: ["dotnet", "test", "tests/tests.csproj", "-c", "Release", "-v", "minimal"]
     working_dir: /src
+    volumes:
+      - ./evaluation:/src/evaluation

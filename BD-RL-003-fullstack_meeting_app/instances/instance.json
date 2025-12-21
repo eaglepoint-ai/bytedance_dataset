@@ -1,8 +1,8 @@
 {
-  "instance_id": "task_fullstack_meeting_app",
+  "instance_id": "BD-RL-003",
   "problem_statement": "Building a meeting scheduler application with a backend and a frontend.",
   "base_commit": "repository_before",
-  "test_patch": "patches/task_fullstack_meeting_app.patch",
-  "repo": "repository_after/meeting-scheduler",
+  "test_patch": "https://github.com/eaglepoint-ai/bytedance_dataset/blob/main/BD-RL-003-fullstack_meeting_app/patches/task_fullstack_meeting_app.patch",
+  "repo": "https://github.com/eaglepoint-ai/bytedance_dataset/tree/main/BD-RL-003-fullstack_meeting_app",
   "environment_setup": "docker-compose.yml"
 }
