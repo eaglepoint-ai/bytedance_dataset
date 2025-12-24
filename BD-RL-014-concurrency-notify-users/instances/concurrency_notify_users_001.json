@@ -1,0 +1,15 @@
+{
+  "instance_id": "concurrency_notify_users_001",
+  "problem_statement": "Refactor notify_users in notify_service.py to use bounded concurrency while preserving strict ordering and error semantics. You must ensure no more than 50 concurrent send_notification calls across the process, avoid thread explosion with large user lists, use only the Python standard library, and propagate fatal errors like KeyboardInterrupt without swallowing them.",
+  "base_commit": "repository_before",
+  "test_command": "pytest -q",
+  "repo": "-",
+  "environment_setup": "Dockerfile",
+  "FAIL_TO_PASS": [
+    "tests/test_concurrency_constraints.py::test_uses_concurrency_and_respects_global_limit"
+  ],
+  "PASS_TO_PASS": [
+    "tests/test_behavior_basics.py::test_order_and_error_alignment",
+    "tests/test_behavior_basics.py::test_keyboard_interrupt_propagates"
+  ]
+}

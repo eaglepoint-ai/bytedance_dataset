@@ -1,0 +1,10 @@
+{
+  "name": "react-user-dashboard-dataset",
+  "version": "1.0.0",
+  "scripts": {
+    "test": "npx jest --runInBand"
+  },
+  "dependencies": {
+    "jest": "^30.2.0"
+  }
+}

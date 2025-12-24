@@ -1,0 +1,14 @@
+{
+  "instance_id": "react_dashboard_perf_001",
+  "problem_statement": "Optimize the React UserAnalyticsDashboard component so that memoization of UserItem is actually effective, while preserving external behavior. The before implementation recreates user objects with derived fields in the parent, making React.memo ineffective. The after implementation must keep user identity stable, move derived label/lastSeenText into UserItem, and adjust props to use isSelected and formatLastActive.",
+  "base_commit": "repository_before",
+  "test_command": "npm test",
+  "repo": "-",
+  "environment_setup": "Dockerfile",
+  "FAIL_TO_PASS": [
+    "tests/structure.test.js::structure expectations for repository_after"
+  ],
+  "PASS_TO_PASS": [
+    "tests/equivalence.test.js"
+  ]
+}
