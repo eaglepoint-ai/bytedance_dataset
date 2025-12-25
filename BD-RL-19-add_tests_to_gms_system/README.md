@@ -90,6 +90,6 @@ The benchmark writes `evaluation/report-<YYYYMMDD-HHMMSS>-<RUNID>.json` with:
 ### Generate a report locally (no Docker)
 ```bash
 .venv/bin/python \
-  evaluation/performance_benchmark.py --tests tests/test_sequence_generator_meta.py
+  evaluation/evaluations.py --tests tests/test_sequence_generator_meta.py
 # Output: evaluation/report-<YYYYMMDD-HHMMSS>-<RUNID>.json
 ```
