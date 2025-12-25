@@ -1,0 +1,8 @@
+{
+  "instance_id": "BD-RL-19-add_tests_to_gms_system",
+  "problem_statement": "You are testing a Global Message Sequence (GMS). This system is designed to give every message sent in a distributed chat app a unique, incrementing sequence_id. It uses a Lease system to reduce database hits: it grabs a block of 100 IDs from the DB at once and hands them out from local memory. Generate a pytest test suite to check that the system is implemented correctly to handle a huge amount of load concurrently.",
+  "base_commit": "repository_before",
+  "test_patch": "tests/",
+  "repo": "https://github.com/eaglepoint-ai/bytedance_dataset/tree/main/BD-RL-19-add_tests_to_gms_system",
+  "environment_setup": "Dockerfile"
+}

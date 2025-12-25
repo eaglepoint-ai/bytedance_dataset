@@ -1,0 +1,17 @@
+version: "3.8"
+
+services:
+  tests:
+    build: .
+    volumes:
+      - .:/app
+    command: >
+      pytest -q tests/test_sequence_generator_meta.py
+  benchmark:
+    build: .
+    volumes:
+      - .:/app
+    command: >
+      python evaluation/evaluations.py
+        --tests tests/test_sequence_generator_meta.py
+        --output-dir ${OUTPUT_DIR:-evaluation}
