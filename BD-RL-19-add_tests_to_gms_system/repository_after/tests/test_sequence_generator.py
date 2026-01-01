@@ -1,0 +1,287 @@
+import math
+import threading
+import random
+import time
+from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
+
+import pytest
+
+# Ensure we can import the generator from repository_after/
+ROOT = Path(__file__).resolve().parents[2]
+AFTER_DIR = ROOT / "repository_after"
+assert AFTER_DIR.exists(), "repository_after directory must exist"
+
+import sys
+
+if str(AFTER_DIR) not in sys.path:
+    sys.path.append(str(AFTER_DIR))
+from gms_sequence_generator import SequenceGenerator  # type: ignore
+
+
+class FakeDB:
+    """Thread-safe fake DB that hands out sequential lease start offsets.
+
+    Each call returns the current start and advances by block_size.
+    """
+
+    def __init__(self, start: int = 0, block_size: int = 100):
+        self._lock = threading.Lock()
+        self.next_block_start = start
+        self.block_size = block_size
+        self.calls = 0
+
+    def get_next_block_start(self, block_size: int = 100) -> int:
+        # Enforce expected block size
+        if block_size != self.block_size:
+            raise AssertionError(
+                f"Unexpected block_size: {block_size} != {self.block_size}"
+            )
+        with self._lock:
+            start = self.next_block_start
+            self.next_block_start += self.block_size
+            self.calls += 1
+            return start
+
+
+class BadDB:
+    """DB that returns invalid values to validate error handling."""
+
+    def __init__(self, payload):
+        self.payload = payload
+        self.calls = 0
+
+    def get_next_block_start(self, block_size: int = 100):
+        self.calls += 1
+        return self.payload
+
+
+@pytest.fixture()
+def db():
+    return FakeDB(start=0, block_size=100)
+
+
+@pytest.fixture()
+def generator(db):
+    return SequenceGenerator(db)
+
+
+def collect_ids_sequential(gen: SequenceGenerator, n: int) -> list[int]:
+    return [gen.get_next_id() for _ in range(n)]
+
+
+def collect_ids_concurrent(
+    gen: SequenceGenerator, n_threads: int, calls_per_thread: int
+) -> list[int]:
+    results: list[int] = []
+    r_lock = threading.Lock()
+
+    def worker(k: int):
+        local = []
+        for _ in range(k):
+            # Small jitter to increase scheduling variance and contention
+            if random.random() < 0.2:
+                time.sleep(random.random() * 0.001)
+            local.append(gen.get_next_id())
+        with r_lock:
+            results.extend(local)
+
+    with ThreadPoolExecutor(max_workers=n_threads) as ex:
+        futures = [ex.submit(worker, calls_per_thread) for _ in range(n_threads)]
+        for f in futures:
+            f.result()
+    return results
+
+
+def assert_basic_properties(ids: list[int], expected_total: int):
+    # Uniqueness
+    assert len(ids) == expected_total, "Collected count mismatch"
+    assert len(set(ids)) == expected_total, "Duplicate sequence IDs detected"
+    # Range and monotonicity in aggregate
+    sorted_ids = sorted(ids)
+    assert sorted_ids[0] == 1, "Sequence must start at 1"
+    assert sorted_ids[-1] == expected_total, "Sequence must reach expected max"
+    assert sorted_ids == list(
+        range(1, expected_total + 1)
+    ), "Global monotonic increasing without gaps"
+
+
+def test_sequential_uniqueness_monotonicity_and_efficiency(
+    generator: SequenceGenerator, db: FakeDB
+):
+    n = 1000
+    ids = collect_ids_sequential(generator, n)
+    assert_basic_properties(ids, n)
+    # Exactly ceil(n / 100) leases should be taken
+    assert db.calls == math.ceil(
+        n / db.block_size
+    ), f"Expected {math.ceil(n / db.block_size)} leases, got {db.calls}"
+
+
+def test_lease_boundaries_transition(generator: SequenceGenerator, db: FakeDB):
+    # First lease should produce IDs 1..100
+    first = collect_ids_sequential(generator, 100)
+    assert first[0] == 1 and first[-1] == 100, "Lease should cover 100 IDs exactly"
+    assert db.calls == 1, "Only one lease call for first 100 IDs"
+    # Next call should trigger a new lease then return 101
+    nxt = generator.get_next_id()
+    assert nxt == 101, "Boundary transition to next lease should be contiguous"
+    assert db.calls == 2, "Second lease should be acquired at boundary"
+
+
+def test_concurrent_uniqueness_monotonicity(generator: SequenceGenerator, db: FakeDB):
+    threads = 32
+    per = 200
+    total = threads * per
+    ids = collect_ids_concurrent(generator, threads, per)
+    # Strict properties under concurrency
+    assert_basic_properties(ids, total)
+    # Efficiency: exactly the required leases
+    expected_leases = math.ceil(total / db.block_size)
+    assert db.calls == expected_leases, (
+        f"Expected {expected_leases} lease calls under concurrency; got {db.calls}."
+        " Implementation should be concurrency-safe and minimize DB calls."
+    )
+
+
+def test_types_and_sign(generator: SequenceGenerator, db: FakeDB):
+    n = 257
+    ids = collect_ids_sequential(generator, n)
+    for i in ids:
+        assert isinstance(i, int), "IDs must be integers"
+        assert i >= 1, "IDs must be positive"
+
+
+def test_bad_db_response_raises():
+    # If DB returns a non-integer or invalid value, generator should not silently proceed
+    bad = BadDB(payload="not-an-int")
+    gen = SequenceGenerator(bad)
+    with pytest.raises(Exception):
+        gen.get_next_id()
+
+
+def test_concurrent_boundary_contention(generator: SequenceGenerator, db: FakeDB):
+    # Force state near boundary to maximize contention
+    generator.current_id = 99
+    generator.max_id_in_lease = 100
+
+    ids = collect_ids_concurrent(generator, n_threads=4, calls_per_thread=2)
+    # We expect to see {100, 101, 102, 103, 104, 105, 106, 107} if perfect;
+    # any duplicates or gaps indicate concurrency bugs.
+    assert len(set(ids)) == len(
+        ids
+    ), "Duplicates around boundary indicate race conditions"
+    assert sorted(ids)[0] == 100, "Should include final ID of current lease"
+
+
+@pytest.mark.stress
+def test_large_volume_concurrent(generator: SequenceGenerator, db: FakeDB):
+    threads = 50
+    per = 200
+    total = threads * per  # 10_000 IDs
+    ids = collect_ids_concurrent(generator, threads, per)
+    assert_basic_properties(ids, total)
+    expected_leases = math.ceil(total / db.block_size)
+    assert (
+        db.calls == expected_leases
+    ), "Excessive DB calls suggest improper lease handling under load"
+
+
+def test_no_block_leak_or_skip(generator: SequenceGenerator, db: FakeDB):
+    # Acquire several full leases and ensure no gaps or repeats within each block
+    total = 5 * db.block_size  # 500 IDs
+    ids = collect_ids_sequential(generator, total)
+    # Partition by lease-sized chunks in the sorted sequence
+    sorted_ids = sorted(ids)
+    for i in range(5):
+        block = sorted_ids[i * db.block_size : (i + 1) * db.block_size]
+        expected = list(range(i * db.block_size + 1, (i + 1) * db.block_size + 1))
+        assert (
+            block == expected
+        ), f"Lease {i} should be contiguous without gaps or repeats"
+    assert db.calls == 5, "Expected exactly one lease per 100 IDs"
+
+
+def test_initial_concurrent_single_lease(generator: SequenceGenerator, db: FakeDB):
+    # All threads start from empty state; for <= 100 calls, only one lease should be acquired
+    generator.current_id = 0
+    generator.max_id_in_lease = 0
+    threads = 20
+    per = 5  # total 100
+    ids = collect_ids_concurrent(generator, threads, per)
+    assert len(set(ids)) == len(
+        ids
+    ), "Duplicates indicate race conditions on initial lease"
+    assert (
+        sorted(ids)[0] == 1 and sorted(ids)[-1] == threads * per
+    ), "IDs should cover 1..100"
+    assert db.calls == 1, "Only one lease should be acquired when total <= lease size"
+
+
+def test_mid_lease_concurrent_no_extra_lease(generator: SequenceGenerator, db: FakeDB):
+    # Position inside a lease; concurrent calls that do not exceed remaining capacity must not trigger a new lease
+    generator.current_id = 42
+    generator.max_id_in_lease = 100
+    remaining = generator.max_id_in_lease - generator.current_id  # 58
+    threads = 29
+    per = 2  # total 58, exactly remaining capacity
+    ids = collect_ids_concurrent(generator, threads, per)
+    sorted_ids = sorted(ids)
+    assert (
+        sorted_ids[0] == 43 and sorted_ids[-1] == 100
+    ), "Must fill the remainder of the current lease exactly"
+    assert db.calls == 0, "Should not acquire a new lease when capacity suffices"
+
+
+def test_over_lease_concurrent_extra_leases_count(
+    generator: SequenceGenerator, db: FakeDB
+):
+    # Starting near boundary; overflowing capacity by 1 should acquire exactly one new lease
+    generator.current_id = 95
+    generator.max_id_in_lease = 100
+    threads = 3
+    per = 2  # total 6 -> overflows by 1 beyond 100
+    ids = collect_ids_concurrent(generator, threads, per)
+    assert len(set(ids)) == len(ids), "Duplicates around lease overflow indicate races"
+    assert min(ids) >= 96, "Should include tail of current lease"
+    assert (
+        db.calls == 1
+    ), "Exactly one new lease should be acquired when crossing boundary once"
+
+
+def test_bad_db_negative_lease_start_invalid_ids():
+    bad = BadDB(payload=-100)
+    gen = SequenceGenerator(bad)
+    # Depending on implementation, this should either raise or avoid producing negative IDs
+    ids = [gen.get_next_id() for _ in range(2)]
+    assert all(
+        i >= 1 for i in ids
+    ), "Generator must not produce negative IDs from bad DB input"
+
+
+def test_interleaved_sequential_then_concurrent(
+    generator: SequenceGenerator, db: FakeDB
+):
+    # Consume 150 IDs sequentially (should take two leases), then 50 concurrently without triggering extra leases
+    seq = collect_ids_sequential(generator, 150)
+    assert seq[0] == 1 and seq[-1] == 150
+    assert db.calls == 2, "Two leases expected for first 150 sequential IDs"
+    ids = collect_ids_concurrent(
+        generator, n_threads=10, calls_per_thread=5
+    )  # 50 more up to 200
+    assert len(set(ids)) == 50
+    assert db.calls == 2, "No additional leases expected within current capacity"
+
+
+@pytest.mark.stress
+def test_concurrent_jitter_high_contention(generator: SequenceGenerator, db: FakeDB):
+    # High contention with jitter to increase race likelihood
+    threads = 64
+    per = 128
+    total = threads * per
+    ids = collect_ids_concurrent(generator, threads, per)
+    assert_basic_properties(ids, total)
+    expected_leases = math.ceil(total / db.block_size)
+    assert (
+        db.calls == expected_leases
+    ), "DB calls must be proportional to leases even under jitter"
